@@ -1,5 +1,6 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
+import { ValidationPipe } from "@nestjs/common";
 import { loadConfig, createLogger } from "@app/config";
 import { AppModule } from "./app.module.js";
 import { requestIdMiddleware } from "./request-id.middleware.js";
@@ -10,6 +11,7 @@ async function bootstrap(): Promise<void> {
 
   const app = await NestFactory.create(AppModule, { logger: false });
   app.use(requestIdMiddleware);
+  app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
 
   await app.listen(config.PORT);
   logger.info({ port: config.PORT }, "api started");

@@ -13,6 +13,7 @@ COD-risk scoring with a COD-to-prepaid nudge, a Shopify integration, and a merch
 - `packages/config` — env schema validation and the structured, PII-redacting logger.
 - `infra/docker-compose.yml` — local Postgres, Redis, and Redpanda (Kafka-compatible).
 - `docs/decisions/` — architecture decision records.
+- `docs/api/` — OpenAPI contracts per domain (e.g. `auth.openapi.yaml`).
 
 ## Getting started
 
@@ -23,6 +24,21 @@ pnpm install
 pnpm run build
 pnpm --filter @app/api run dev
 curl localhost:3000/health
+
+# Phone-OTP login (see docs/api/auth.openapi.yaml for the full contract)
+curl -X POST localhost:3000/auth/otp/request -H "Content-Type: application/json" \
+  -d '{"phone":"+919876543210"}'
+# OTP is printed to the API's log output (console SMS driver, redacted-aware)
+curl -X POST localhost:3000/auth/otp/verify -H "Content-Type: application/json" \
+  -d '{"phone":"+919876543210","otp":"123456"}'
+```
+
+### Running database migrations
+
+```bash
+cd apps/api
+npx prisma migrate dev     # create + apply a migration locally
+npx prisma migrate deploy  # apply pending migrations (CI/prod)
 ```
 
 ## Workspace scripts
