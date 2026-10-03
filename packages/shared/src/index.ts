@@ -1,1 +1,1 @@
-export const SHARED_PACKAGE_NAME = "@checkoutkit/shared";
+export const SHARED_PACKAGE_NAME = "@app/shared";

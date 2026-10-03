@@ -1,5 +1,5 @@
 {
-  "name": "@checkoutkit/checkout-web",
+  "name": "@app/checkout-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",

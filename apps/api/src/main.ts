@@ -1,6 +1,6 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
-import { loadConfig, createLogger } from "@checkoutkit/config";
+import { loadConfig, createLogger } from "@app/config";
 import { AppModule } from "./app.module.js";
 import { requestIdMiddleware } from "./request-id.middleware.js";
 

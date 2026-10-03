@@ -1,0 +1,6 @@
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "pre-commit: gitleaks is not installed — skipping secret scan. Install it (https://github.com/gitleaks/gitleaks#installing) to enforce this locally; CI still runs it on every push." >&2
+  exit 0
+fi
+
+gitleaks protect --staged -v

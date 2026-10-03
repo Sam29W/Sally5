@@ -1,5 +1,5 @@
 {
-  "name": "@checkoutkit/dashboard-web",
+  "name": "@app/dashboard-web",
   "version": "0.0.0",
   "private": true,
   "type": "module",

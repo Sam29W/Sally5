@@ -21,7 +21,7 @@ cp .env.example .env
 docker compose -f infra/docker-compose.yml up -d
 pnpm install
 pnpm run build
-pnpm --filter @checkoutkit/api run dev
+pnpm --filter @app/api run dev
 curl localhost:3000/health
 ```
 
@@ -32,6 +32,8 @@ curl localhost:3000/health
 - `pnpm run typecheck` — TypeScript project-wide, `--noEmit`.
 - `pnpm run test` — unit/integration tests per package.
 - `pnpm run build` — compile every package/app.
+- `pnpm run secrets:scan` — full-history gitleaks scan (also enforced pre-commit and in CI
+  on staged/pushed changes).
 
 ## Status
 
