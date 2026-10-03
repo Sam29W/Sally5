@@ -70,4 +70,33 @@ describe("TokenService", () => {
       RefreshTokenReuseError,
     );
   });
+
+  it("under concurrent rotate calls with the same token, exactly one succeeds", async () => {
+    const pair = await tokenService.issueNewSession(shopperId);
+
+    const results = await Promise.allSettled([
+      tokenService.rotate(pair.refreshToken),
+      tokenService.rotate(pair.refreshToken),
+      tokenService.rotate(pair.refreshToken),
+      tokenService.rotate(pair.refreshToken),
+      tokenService.rotate(pair.refreshToken),
+    ]);
+
+    const succeeded = results.filter((r) => r.status === "fulfilled");
+    const failed = results.filter((r) => r.status === "rejected");
+    expect(succeeded).toHaveLength(1);
+    expect(failed).toHaveLength(4);
+    for (const r of failed) {
+      expect((r as PromiseRejectedResult).reason).toBeInstanceOf(RefreshTokenReuseError);
+    }
+
+    // The race itself counts as reuse, so the family must end up revoked — even the single
+    // "winning" rotation's new token must no longer work.
+    const winner = succeeded[0] as PromiseFulfilledResult<
+      Awaited<ReturnType<typeof tokenService.rotate>>
+    >;
+    await expect(tokenService.rotate(winner.value.refreshToken)).rejects.toBeInstanceOf(
+      RefreshTokenReuseError,
+    );
+  });
 });

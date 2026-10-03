@@ -3,6 +3,7 @@ import { ValidationPipe, type INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
+import { requestIdMiddleware } from "../request-id.middleware.js";
 import { SMS_PROVIDER, type SmsProvider } from "../sms/sms-provider.js";
 
 class CapturingSmsProvider implements SmsProvider {
@@ -29,6 +30,7 @@ describe("Auth flow (e2e)", () => {
       .useValue(sms)
       .compile();
     app = moduleRef.createNestApplication();
+    app.use(requestIdMiddleware);
     app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
     await app.init();
   });

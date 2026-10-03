@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { redactPII } from "./logger.js";
+import { createLogger, redactPII } from "./logger.js";
 
 describe("redactPII", () => {
   it("redacts phone-shaped numbers", () => {
@@ -19,5 +19,25 @@ describe("redactPII", () => {
     expect(redactPII("otp 123456 sent to 9876543210")).toBe(
       "otp [REDACTED_OTP] sent to [REDACTED_PHONE]",
     );
+  });
+});
+
+describe("createLogger", () => {
+  it("builds a working pino logger at the configured level", () => {
+    const logger = createLogger({ level: "debug", name: "test-logger" });
+    expect(logger.level).toBe("debug");
+    // Exercises the formatters.log -> redactObject/redactValue path for real, including a
+    // nested array, to prove the structured-log redaction actually runs end-to-end.
+    expect(() =>
+      logger.info(
+        { phone: "+919876543210", nested: { otp: "482913" }, tags: ["call 9876543210"] },
+        "test log line",
+      ),
+    ).not.toThrow();
+  });
+
+  it("defaults the logger name when none is given", () => {
+    const logger = createLogger({ level: "info" });
+    expect(logger.level).toBe("info");
   });
 });

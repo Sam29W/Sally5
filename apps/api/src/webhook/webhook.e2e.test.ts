@@ -3,6 +3,7 @@ import type { INestApplication } from "@nestjs/common";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { AppModule } from "../app.module.js";
+import { requestIdMiddleware } from "../request-id.middleware.js";
 
 describe("Webhook tenant isolation (e2e)", () => {
   let app: INestApplication;
@@ -12,6 +13,7 @@ describe("Webhook tenant isolation (e2e)", () => {
   beforeAll(async () => {
     const moduleRef = await Test.createTestingModule({ imports: [AppModule] }).compile();
     app = moduleRef.createNestApplication();
+    app.use(requestIdMiddleware);
     await app.init();
 
     const server = app.getHttpServer();
