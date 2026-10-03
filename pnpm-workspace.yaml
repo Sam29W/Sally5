@@ -1,0 +1,11 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+allowBuilds:
+  "@nestjs/core": true
+  esbuild: true
+
+onlyBuiltDependencies:
+  - "@nestjs/core"
+  - "esbuild"
