@@ -18,6 +18,10 @@ const envSchema = z.object({
   OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
   OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(30),
+  // 32-byte key, hex-encoded, for AES-256-GCM encryption of webhook signing secrets at rest.
+  WEBHOOK_SECRET_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/i, "must be 64 hex chars (32 bytes)"),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

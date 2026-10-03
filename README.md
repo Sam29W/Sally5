@@ -31,6 +31,19 @@ curl -X POST localhost:3000/auth/otp/request -H "Content-Type: application/json"
 # OTP is printed to the API's log output (console SMS driver, redacted-aware)
 curl -X POST localhost:3000/auth/otp/verify -H "Content-Type: application/json" \
   -d '{"phone":"+919876543210","otp":"123456"}'
+# -> { "accessToken": "...", "refreshToken": "..." }
+
+# Merchants and webhooks (see docs/api/merchants.openapi.yaml)
+curl -X POST localhost:3000/merchants -H "Content-Type: application/json" \
+  -d '{"name":"Acme"}'
+# -> { "merchantId": "...", "apiKey": "<prefix>.<secret>" }
+curl -X POST localhost:3000/webhooks -H "x-api-key: <apiKey>" -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/hook"}'
+
+# Shopper address book (see docs/api/shopper.openapi.yaml) — needs the accessToken above
+curl -X POST localhost:3000/shopper/addresses -H "Authorization: Bearer <accessToken>" \
+  -H "Content-Type: application/json" \
+  -d '{"line1":"221B Baker Colony Road","city":"Mumbai","state":"Maharashtra","pincode":"400001"}'
 ```
 
 ### Running database migrations

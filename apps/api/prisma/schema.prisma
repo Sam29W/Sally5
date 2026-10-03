@@ -17,8 +17,85 @@ model Shopper {
   updatedAt      DateTime        @updatedAt @map("updated_at")
   consents       ConsentRecord[]
   sessionFamilies SessionFamily[]
+  addresses      Address[]
 
   @@map("shoppers")
+}
+
+model Merchant {
+  id               String            @id @default(uuid())
+  name             String
+  createdAt        DateTime          @default(now()) @map("created_at")
+  apiKeys          ApiKey[]
+  webhookEndpoints WebhookEndpoint[]
+  addressShares    AddressShare[]
+
+  @@map("merchants")
+}
+
+model ApiKey {
+  id         String    @id @default(uuid())
+  merchantId String    @map("merchant_id")
+  merchant   Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  // First 8 chars of the key secret, kept in the clear so a merchant can identify which
+  // key is which in a list without ever seeing the full secret again.
+  prefix     String
+  // SHA-256 of the full key secret — the secret itself is shown once at creation and never
+  // stored or logged.
+  keyHash    String    @unique @map("key_hash")
+  revokedAt  DateTime? @map("revoked_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  @@map("api_keys")
+  @@index([merchantId])
+}
+
+model WebhookEndpoint {
+  id            String   @id @default(uuid())
+  merchantId    String   @map("merchant_id")
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  url           String
+  // AES-256-GCM ciphertext of the signing secret (same scheme as phone encryption) — needed
+  // in recoverable form to sign outgoing webhook payloads, so it's encrypted, not hashed.
+  signingSecretEncrypted String @map("signing_secret_encrypted")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@map("webhook_endpoints")
+  @@index([merchantId])
+}
+
+model Address {
+  id           String         @id @default(uuid())
+  shopperId    String         @map("shopper_id")
+  shopper      Shopper        @relation(fields: [shopperId], references: [id], onDelete: Cascade)
+  line1        String
+  line2        String?
+  city         String
+  state        String
+  pincode      String
+  country      String         @default("IN")
+  isDefault    Boolean        @default(false) @map("is_default")
+  qualityScore Int            @map("quality_score")
+  createdAt    DateTime       @default(now()) @map("created_at")
+  updatedAt    DateTime       @updatedAt @map("updated_at")
+  shares       AddressShare[]
+
+  @@map("addresses")
+  @@index([shopperId])
+}
+
+// Explicit shopper consent for a merchant other than the one the address was first used
+// with to see/reuse that address — the shared address network only shares with consent.
+model AddressShare {
+  id         String   @id @default(uuid())
+  addressId  String   @map("address_id")
+  address    Address  @relation(fields: [addressId], references: [id], onDelete: Cascade)
+  merchantId String   @map("merchant_id")
+  merchant   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  grantedAt  DateTime @default(now()) @map("granted_at")
+
+  @@unique([addressId, merchantId])
+  @@map("address_shares")
 }
 
 model ConsentRecord {

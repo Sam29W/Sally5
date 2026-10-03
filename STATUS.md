@@ -123,3 +123,65 @@
 ### Decisions
 
 - [`docs/decisions/002-stage1-identity.md`](docs/decisions/002-stage1-identity.md)
+
+## Stage 2: Merchants, API keys, and the address book — SHIPPED (2026-10-03)
+
+### What was built
+
+- Merchant multi-tenancy: `POST /merchants` (bootstrap, no auth gate — see decision 003),
+  `POST /merchants/api-keys/rotate` (old key revoked immediately). `ApiKeyGuard` resolves
+  `x-api-key` → `merchantId` for every merchant-scoped route.
+- Webhook endpoints: `POST /webhooks`, `GET /webhooks`, `DELETE /webhooks/:id` — every query
+  is scoped to the authenticated merchant; cross-tenant access returns `404`.
+- Shopper address book: `POST/GET /shopper/addresses`, `PATCH/DELETE /shopper/addresses/:id`,
+  `POST /shopper/addresses/:id/default`, `POST /shopper/addresses/:id/share` (consent to
+  reuse across merchants). Pincode validation/normalization
+  ([pincode.util.ts](apps/api/src/address/pincode.util.ts)) and a pure address-quality score
+  ([address-quality.ts](apps/api/src/address/address-quality.ts)). This closes the Stage 1
+  gap of `TokenService.verifyAccessToken()` having no guard wired to it —
+  `AccessTokenGuard` now protects every shopper-facing route.
+- Shopper data rights: `GET /shopper/me/export` (full profile + consents + addresses),
+  `DELETE /shopper/me` (cascading erasure).
+- Contracts: [`docs/api/merchants.openapi.yaml`](docs/api/merchants.openapi.yaml),
+  [`docs/api/shopper.openapi.yaml`](docs/api/shopper.openapi.yaml).
+- Migration `20261003110701_merchants_webhooks_addresses` for `merchants`, `api_keys`,
+  `webhook_endpoints`, `addresses`, `address_shares`.
+
+### What was verified
+
+- Typecheck, lint, format all clean.
+- Migrations: applied, reset/rolled back, reapplied against live Postgres — clean, no drift.
+- `pnpm audit`: no new findings (21, unchanged from Stage 1).
+- `gitleaks`: two true findings, both in the local `.env` only (never committed, gitignored)
+  — zero findings in anything tracked by git.
+- Self-review of every new Prisma query confirmed tenant/owner scoping is enforced before
+  any read, update, or delete (see decision 003) — not just at the guard layer.
+- End-to-end smoke test against the live stack: created a merchant, got a usable API key,
+  confirmed `/health` still responds.
+
+### Test results
+
+- 37/37 tests in `apps/api` pass (up from 20), run twice with identical results:
+  - Cross-tenant isolation: a merchant cannot list, see, or delete another merchant's
+    webhook endpoints (`404`, not `403` — existence isn't leaked); API key rotation
+    immediately invalidates the old key.
+  - Address ownership: a shopper cannot read, update, default, or delete another shopper's
+    address (`404`).
+  - Address CRUD: create/list/default-switching/delete, invalid-pincode rejection (`400`),
+    deterministic quality scoring (unit tests, no I/O).
+  - Shopper data rights: full export round-trips an address and the Stage 1 login consent;
+    delete cascades so a subsequent export correctly `404`s.
+- Full workspace suite (`pnpm run test`): 41/41 passing, 0 flaky.
+
+### Known gaps / follow-ups
+
+- `POST /merchants` has no auth gate (can't, since it mints the first key) — needs an
+  admin-only provisioning flow before real merchants onboard. See decision 003.
+- No endpoint yet reads a shared address on the merchant side — the `AddressShare` consent
+  table exists but nothing consumes it until Stage 3's checkout flow needs it.
+- Coverage-% tooling still not wired in (carried over from Stage 1).
+- Stage 1's race-safety and `trust proxy` gaps are unchanged — see decision 002.
+
+### Decisions
+
+- [`docs/decisions/003-stage2-tenancy-addresses.md`](docs/decisions/003-stage2-tenancy-addresses.md)
