@@ -82,4 +82,16 @@ export class AddressService {
       throw new NotFoundException("Address not found");
     }
   }
+
+  /**
+   * Merchant-facing read: returns only addresses belonging to `shopperId` that have an
+   * explicit `AddressShare` consent row for `merchantId`. A merchant with no consent gets
+   * an empty array — never a 403/404 that would leak whether the shopper exists.
+   */
+  async listSharedWithMerchant(shopperId: string, merchantId: string): Promise<Address[]> {
+    return this.prisma.address.findMany({
+      where: { shopperId, shares: { some: { merchantId } } },
+      orderBy: { createdAt: "asc" },
+    });
+  }
 }

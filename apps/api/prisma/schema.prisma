@@ -29,6 +29,8 @@ model Merchant {
   apiKeys          ApiKey[]
   webhookEndpoints WebhookEndpoint[]
   addressShares    AddressShare[]
+  cartSessions     CartSession[]
+  orders           Order[]
 
   @@map("merchants")
 }
@@ -136,4 +138,80 @@ model RefreshToken {
 
   @@map("refresh_tokens")
   @@index([familyId])
+}
+
+model CartSession {
+  id             String   @id @default(uuid())
+  merchantId     String   @map("merchant_id")
+  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  shopperId      String?  @map("shopper_id")
+  // Line items as submitted: [{ sku, name, quantity, unitPriceCents }, ...].
+  items          Json
+  couponCode     String?  @map("coupon_code")
+  subtotalCents  Int      @map("subtotal_cents")
+  discountCents  Int      @map("discount_cents")
+  shippingCents  Int      @map("shipping_cents")
+  taxCents       Int      @map("tax_cents")
+  totalCents     Int      @map("total_cents")
+  createdAt      DateTime @default(now()) @map("created_at")
+  orders         Order[]
+
+  @@map("cart_sessions")
+  @@index([merchantId])
+}
+
+// created -> payment_pending -> paid | cod_confirmed -> fulfilled -> delivered | rto
+//   \-> cancelled (from created or payment_pending only)
+// Legal transitions are enforced centrally in order-state-machine.ts, not scattered
+// across callers, so there is exactly one place that can ever get this wrong.
+enum OrderStatus {
+  created
+  payment_pending
+  paid
+  cod_confirmed
+  fulfilled
+  delivered
+  rto
+  cancelled
+}
+
+model Order {
+  id             String       @id @default(uuid())
+  merchantId     String       @map("merchant_id")
+  merchant       Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  cartSessionId  String       @map("cart_session_id")
+  cartSession    CartSession  @relation(fields: [cartSessionId], references: [id])
+  shopperId      String?      @map("shopper_id")
+  status         OrderStatus  @default(created)
+  totalCents     Int          @map("total_cents")
+  // Scoped per-merchant (see @@unique below) — lets a merchant safely retry an order
+  // creation call without ever double-creating the order.
+  idempotencyKey String       @map("idempotency_key")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+  outboxEvents   OutboxEvent[]
+
+  @@map("orders")
+  @@unique([merchantId, idempotencyKey])
+  @@index([merchantId])
+}
+
+// The outbox pattern: every state-changing write to an Order inserts a row here in the
+// *same* database transaction. A separate publisher step reads unpublished rows and sends
+// them to Kafka, marking publishedAt on success. Because the event row and the order
+// mutation commit atomically together, a crash at any point — including exactly between
+// the DB commit and the Kafka publish — can never lose an event: on restart, the
+// publisher simply finds the still-unpublished row and sends it (at-least-once delivery).
+model OutboxEvent {
+  id            String    @id @default(uuid())
+  orderId       String    @map("order_id")
+  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eventType     String    @map("event_type")
+  // Event body as it will be published to Kafka.
+  payload       Json
+  createdAt     DateTime  @default(now()) @map("created_at")
+  publishedAt   DateTime? @map("published_at")
+
+  @@map("outbox_events")
+  @@index([publishedAt])
 }

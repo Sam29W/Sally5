@@ -1,0 +1,181 @@
+openapi: 3.0.3
+info:
+  title: CheckoutKit Cart & Order API
+  version: 0.1.0
+paths:
+  /carts:
+    post:
+      summary: Create a cart session from line items (merchant-scoped)
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [items]
+              properties:
+                shopperId:
+                  type: string
+                items:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/LineItem"
+                couponCode:
+                  type: string
+      responses:
+        "201":
+          description: Cart created with computed subtotal/discount/shipping/tax/total
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartSession"
+  /carts/{id}:
+    get:
+      summary: Fetch a cart session (merchant-scoped)
+      security:
+        - apiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Cart session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CartSession"
+        "404":
+          description: Not found (including when it belongs to a different merchant)
+  /orders:
+    post:
+      summary: Create an order from a cart session (idempotent)
+      security:
+        - apiKey: []
+      parameters:
+        - name: Idempotency-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [cartSessionId]
+              properties:
+                cartSessionId:
+                  type: string
+      responses:
+        "201":
+          description: Order created (or the existing order, if this idempotency key was seen before)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+  /orders/{id}/transition:
+    post:
+      summary: Attempt a state transition on an order
+      security:
+        - apiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to:
+                  $ref: "#/components/schemas/OrderStatus"
+      responses:
+        "200":
+          description: Transitioned
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Order"
+        "409":
+          description: Illegal transition for the order's current status
+  /merchants/shoppers/{shopperId}/addresses:
+    get:
+      summary: Read a shopper's addresses that have been explicitly shared with the calling merchant
+      security:
+        - apiKey: []
+      parameters:
+        - name: shopperId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Only addresses with an AddressShare consent row for this merchant — empty if none
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+  schemas:
+    LineItem:
+      type: object
+      required: [sku, name, quantity, unitPriceCents]
+      properties:
+        sku:
+          type: string
+        name:
+          type: string
+        quantity:
+          type: integer
+          minimum: 1
+        unitPriceCents:
+          type: integer
+          minimum: 0
+    CartSession:
+      type: object
+      properties:
+        id:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LineItem"
+        couponCode:
+          type: string
+        subtotalCents:
+          type: integer
+        discountCents:
+          type: integer
+        shippingCents:
+          type: integer
+        taxCents:
+          type: integer
+        totalCents:
+          type: integer
+    OrderStatus:
+      type: string
+      enum: [created, payment_pending, paid, cod_confirmed, fulfilled, delivered, rto, cancelled]
+    Order:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          $ref: "#/components/schemas/OrderStatus"
+        totalCents:
+          type: integer
+        cartSessionId:
+          type: string

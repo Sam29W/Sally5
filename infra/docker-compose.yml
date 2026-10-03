@@ -36,7 +36,12 @@ services:
       - --node-id=0
       - --check=false
       - --kafka-addr=PLAINTEXT://0.0.0.0:9092
-      - --advertise-kafka-addr=PLAINTEXT://redpanda:9092
+      # Advertise localhost, not the in-network hostname "redpanda" — the app connects
+      # from the host (not from inside this compose network), and after the initial
+      # connect, kafkajs reconnects using whatever address the broker advertises in its
+      # metadata response. Advertising the container hostname here made every
+      # post-handshake request fail with ENOTFOUND outside this compose network.
+      - --advertise-kafka-addr=PLAINTEXT://localhost:9092
     ports:
       - "9092:9092"
     healthcheck:

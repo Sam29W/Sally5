@@ -44,6 +44,15 @@ curl -X POST localhost:3000/webhooks -H "x-api-key: <apiKey>" -H "Content-Type: 
 curl -X POST localhost:3000/shopper/addresses -H "Authorization: Bearer <accessToken>" \
   -H "Content-Type: application/json" \
   -d '{"line1":"221B Baker Colony Road","city":"Mumbai","state":"Maharashtra","pincode":"400001"}'
+
+# Cart and order flow (see docs/api/orders.openapi.yaml)
+curl -X POST localhost:3000/carts -H "x-api-key: <apiKey>" -H "Content-Type: application/json" \
+  -d '{"items":[{"sku":"A","name":"Widget","quantity":2,"unitPriceCents":1000}]}'
+# -> { "id": "...", "subtotalCents": 2000, "totalCents": ... }
+curl -X POST localhost:3000/orders -H "x-api-key: <apiKey>" -H "Idempotency-Key: $(uuidgen)" \
+  -H "Content-Type: application/json" -d '{"cartSessionId":"<cartId>"}'
+curl -X POST localhost:3000/orders/<orderId>/transition -H "x-api-key: <apiKey>" \
+  -H "Content-Type: application/json" -d '{"to":"payment_pending"}'
 ```
 
 ### Running database migrations
