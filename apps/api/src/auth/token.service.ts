@@ -79,19 +79,24 @@ export class TokenService {
     if (record.expiresAt.getTime() < Date.now()) {
       throw new RefreshTokenInvalidError("Refresh token expired");
     }
-    if (record.rotatedAt) {
-      // This exact token was already consumed once — reuse. Revoke the whole family.
+    // Atomic claim: a single UPDATE ... WHERE rotatedAt IS NULL is a row-level-locked
+    // operation in Postgres, so under two concurrent rotate() calls for the same token only
+    // one UPDATE can match and succeed — the other's WHERE clause re-evaluates after the
+    // first commits and finds rotatedAt already set, so its count is 0. This closes the
+    // read-then-write TOCTOU window a separate findUnique+update would have.
+    const claim = await this.prisma.refreshToken.updateMany({
+      where: { id: record.id, rotatedAt: null },
+      data: { rotatedAt: new Date() },
+    });
+    if (claim.count === 0) {
+      // Either this call lost the race to a concurrent rotate(), or the token had already
+      // been rotated before this call started — both are reuse. Revoke is idempotent.
       await this.prisma.sessionFamily.update({
         where: { id: record.familyId },
         data: { revokedAt: new Date() },
       });
       throw new RefreshTokenReuseError("Refresh token reuse detected — session revoked");
     }
-
-    await this.prisma.refreshToken.update({
-      where: { id: record.id },
-      data: { rotatedAt: new Date() },
-    });
 
     return this.issueTokenPairInFamily(record.familyId, record.family.shopperId);
   }

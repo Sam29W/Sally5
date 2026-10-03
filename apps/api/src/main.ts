@@ -1,15 +1,18 @@
 import "reflect-metadata";
 import { NestFactory } from "@nestjs/core";
 import { ValidationPipe } from "@nestjs/common";
+import type { NestExpressApplication } from "@nestjs/platform-express";
 import { loadConfig, createLogger } from "@app/config";
 import { AppModule } from "./app.module.js";
 import { requestIdMiddleware } from "./request-id.middleware.js";
+import { applyTrustProxy } from "./trust-proxy.js";
 
 async function bootstrap(): Promise<void> {
   const config = loadConfig();
   const logger = createLogger({ level: config.LOG_LEVEL, name: "api" });
 
-  const app = await NestFactory.create(AppModule, { logger: false });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { logger: false });
+  applyTrustProxy(app, config.TRUST_PROXY_HOPS);
   app.use(requestIdMiddleware);
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
 

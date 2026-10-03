@@ -22,6 +22,11 @@ const envSchema = z.object({
   WEBHOOK_SECRET_ENCRYPTION_KEY: z
     .string()
     .regex(/^[0-9a-f]{64}$/i, "must be 64 hex chars (32 bytes)"),
+  // Number of reverse-proxy hops Express should trust when deriving the client IP from
+  // X-Forwarded-For. 0 (default) means "no proxy" — req.ip is always the real socket
+  // address and X-Forwarded-For is ignored, so it can't be spoofed to bypass per-IP rate
+  // limiting. Set to the real hop count only once this sits behind a load balancer.
+  TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

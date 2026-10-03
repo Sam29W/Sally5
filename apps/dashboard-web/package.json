@@ -6,6 +6,7 @@
   "scripts": {
     "build": "echo \"dashboard-web: scaffolded in Stage 0, implemented in Stage 8\" && exit 0",
     "typecheck": "echo \"dashboard-web: no typecheck yet\" && exit 0",
-    "test": "echo \"dashboard-web: no tests yet\" && exit 0"
+    "test": "echo \"dashboard-web: no tests yet\" && exit 0",
+    "test:coverage": "echo \"dashboard-web: no tests yet\" && exit 0"
   }
 }

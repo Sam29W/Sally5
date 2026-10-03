@@ -72,4 +72,25 @@ describe("OtpService", () => {
       );
     }
   }, 10000);
+
+  it("under concurrent verify calls with the correct code, exactly one succeeds", async () => {
+    const phoneHash = freshPhoneHash();
+    const code = await service.request(phoneHash, freshIp());
+
+    const results = await Promise.allSettled([
+      service.verify(phoneHash, code),
+      service.verify(phoneHash, code),
+      service.verify(phoneHash, code),
+      service.verify(phoneHash, code),
+      service.verify(phoneHash, code),
+    ]);
+
+    const succeeded = results.filter((r) => r.status === "fulfilled");
+    const failed = results.filter((r) => r.status === "rejected");
+    expect(succeeded).toHaveLength(1);
+    expect(failed).toHaveLength(4);
+    for (const r of failed) {
+      expect((r as PromiseRejectedResult).reason).toBeInstanceOf(OtpInvalidError);
+    }
+  });
 });

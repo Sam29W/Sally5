@@ -6,6 +6,7 @@
   "scripts": {
     "build": "echo \"checkout-web: scaffolded in Stage 0, implemented in Stage 6\" && exit 0",
     "typecheck": "echo \"checkout-web: no typecheck yet\" && exit 0",
-    "test": "echo \"checkout-web: no tests yet\" && exit 0"
+    "test": "echo \"checkout-web: no tests yet\" && exit 0",
+    "test:coverage": "echo \"checkout-web: no tests yet\" && exit 0"
   }
 }
