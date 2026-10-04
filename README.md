@@ -58,6 +58,11 @@ curl -X POST localhost:3000/orders/<orderId>/transition -H "x-api-key: <apiKey>"
 # Razorpay sandbox keys are set (see "Payments" below)
 curl -X POST localhost:3000/payments -H "x-api-key: <apiKey>" -H "Content-Type: application/json" \
   -d '{"orderId":"<orderId>","method":"upi"}'
+
+# COD risk scoring (see docs/api/cod-risk.openapi.yaml)
+curl -X POST localhost:3000/orders/<orderId>/cod-risk/score -H "x-api-key: <apiKey>" \
+  -H "Content-Type: application/json" -d '{"addressId":"<addressId>"}'
+# -> { "score": 0, "band": "low", "action": "allow", "reasons": [], "ruleVersion": "v1" }
 ```
 
 ### Payments
