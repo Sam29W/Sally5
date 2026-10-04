@@ -11,6 +11,7 @@ import { KafkaModule } from "./kafka/kafka.module.js";
 import { CartModule } from "./cart/cart.module.js";
 import { OrderModule } from "./order/order.module.js";
 import { OutboxModule } from "./outbox/outbox.module.js";
+import { PaymentModule } from "./payment/payment.module.js";
 
 @Module({
   imports: [
@@ -25,6 +26,7 @@ import { OutboxModule } from "./outbox/outbox.module.js";
     CartModule,
     OrderModule,
     OutboxModule,
+    PaymentModule,
   ],
   controllers: [HealthController],
 })

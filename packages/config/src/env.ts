@@ -31,6 +31,21 @@ const envSchema = z.object({
   // (never runs) in NODE_ENV=test — tests call OutboxService.publishPending() directly so
   // they aren't racing a background timer.
   OUTBOX_PUBLISH_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
+  // HMAC secret for the in-memory fake payment gateway used by every test — not a real
+  // credential, just needs to be present so signature verification has something to key
+  // off of.
+  FAKE_GATEWAY_WEBHOOK_SECRET: z.string().min(16).default("dev-only-fake-gateway-secret-key"),
+  // Real sandbox credentials — all optional. The Razorpay gateway is only instantiated
+  // when all three are present; until then, payment creation/refund/reconciliation against
+  // "razorpay" simply isn't available, but nothing at boot requires them (the fake gateway
+  // covers every test).
+  RAZORPAY_KEY_ID: z.string().optional(),
+  RAZORPAY_KEY_SECRET: z.string().optional(),
+  RAZORPAY_WEBHOOK_SECRET: z.string().optional(),
+  CHECKOUT_BASE_URL: z.string().default("http://localhost:5173"),
+  // How often the reconciliation job polls payments stuck in `pending`.
+  RECONCILIATION_INTERVAL_MS: z.coerce.number().int().positive().default(60000),
+  RECONCILIATION_STALE_AFTER_MS: z.coerce.number().int().positive().default(300000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

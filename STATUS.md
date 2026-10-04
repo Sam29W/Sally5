@@ -392,6 +392,98 @@ gap called for, and confirm CI is green on GitHub.
 - Folded into [`docs/decisions/004-stage3-cart-order-outbox.md`](docs/decisions/004-stage3-cart-order-outbox.md)
   (updated, not a new record — this closes a gap that decision already described).
 
+## CI fixups — SHIPPED (2026-10-04)
+
+Requested before Stage 4: add `workflow_dispatch`, confirm CI is green on GitHub.
+
+### What was found and fixed
+
+- The CI `build` job never started Postgres/Redis/Redpanda — `pnpm run test` would fail
+  the instant a real push ran it. Fixed by reusing `infra/docker-compose.yml`
+  (`docker compose up -d --wait`) and loading `.env.example`'s non-secret dev placeholders
+  into `$GITHUB_ENV`.
+- Step order was backwards: `typecheck` ran before `build`, but `@app/config`/`@app/shared`
+  only publish their types from `dist/`, which only exists after a build — worked locally
+  by accident (dist/ already existed from earlier manual builds) but fails on a clean
+  checkout. Fixed by moving `Build` before `Typecheck`/`Test`.
+- Added `workflow_dispatch` so CI can be triggered manually from the Actions tab.
+
+**Confirmed green**: [run 37200313454](https://github.com/heytanix/Sally5/actions/runs/37200313454)
+— both jobs passed in 1m16s, with `Test` running against real service containers.
+
+## Stage 4: Payment orchestration — SHIPPED (2026-10-04)
+
+### What was built
+
+- `PaymentGateway` interface ([payment-gateway.ts](apps/api/src/payment/payment-gateway.ts)):
+  `createPayment`, `verifyWebhookSignature` (over the _raw_ body), `refund`, `fetchStatus`.
+- `FakeGateway` — in-memory, HMAC-SHA256 signing, used by **every** test per explicit
+  instruction. `RazorpayGateway` — real sandbox gateway, Razorpay Orders API +
+  `Razorpay.validateWebhookSignature`, only instantiated when `RAZORPAY_KEY_ID` /
+  `_KEY_SECRET` / `_WEBHOOK_SECRET` are all present as env vars (never hardcoded).
+- `POST /payments` (routes via a pure `selectGateway` rule, `["razorpay","fake"]`
+  preference per method — designed for failover, real failover stubbed per scope),
+  `POST /payments/:id/refund`, `POST /payments/webhook/:gateway` (no API key — the gateway
+  calls this, authenticated by its own signature instead).
+- Raw-body webhook handling: a branching body-parser
+  ([body-parser.ts](apps/api/src/body-parser.ts)) gives `/payments/webhook/*` the exact
+  bytes the gateway signed, everything else the normal JSON parser — shared by `main.ts`
+  and tests so they can't diverge.
+- Webhook processing is one atomic transaction: dedup insert
+  (`ProcessedWebhookEvent`) + `Payment` status update + `Order` transition + outbox event,
+  together — a crash partway through can't turn a legitimate retry into a silently-dropped
+  update.
+- `ReconciliationService`/`ReconciliationScheduler` — same `setInterval` pattern as Stage
+  3's outbox publisher, polls payments stuck in `pending` past
+  `RECONCILIATION_STALE_AFTER_MS` and asks the gateway directly for their real status.
+- Contract: [`docs/api/payments.openapi.yaml`](docs/api/payments.openapi.yaml).
+- Migration `20261004120517_payments` for `payments`, `processed_webhook_events`.
+
+### What was verified
+
+- Typecheck, lint, format all clean.
+- Migrations: applied, reset/rolled back, reapplied — all 4 migrations replay clean.
+- `pnpm audit` / `gitleaks`: no new findings from `razorpay`.
+- Self-review: grepped the entire payment module for card/PAN/CVV-shaped field names —
+  zero matches. No raw card or UPI data is ever accepted by the interface or stored
+  anywhere; `Payment` only holds an opaque `gatewayPaymentId` and `amountCents`.
+- Live, end-to-end, not just tests: created a merchant with no Razorpay keys set, confirmed
+  `POST /payments` auto-routed to `"fake"`; sent a correctly-signed `payment.captured`
+  webhook and confirmed the order moved to `paid`; sent a tampered-signature webhook and
+  confirmed `401` with zero side effects.
+
+### Test results
+
+- Tampered webhook signature → `401`, zero side effects (order untouched).
+- Missing signature header → `401`.
+- Duplicate webhook delivery (same event id, replayed) → second delivery reported
+  `"duplicate"`, order transitions exactly once.
+- Out-of-order delivery (a late `payment.failed` arriving after `payment.captured`) does
+  not downgrade an already-captured payment or revert the order.
+- Refund flow against the fake gateway: captured → refunded; refunding an uncaptured
+  payment → `409`.
+- Reconciliation: a stuck-pending payment the gateway now reports `captured` gets resolved
+  and moves the order to `paid`; one reported `failed` gets resolved without touching the
+  order; one still `pending` is left alone.
+- Cross-tenant: 404 creating a payment for another merchant's order.
+- Full workspace suite: **177/177** passing (166 in `apps/api`, up from 141 + 25 new; 11
+  unchanged in `packages/config`), 0 flaky, run twice.
+- Coverage: `apps/api` **93.07% statements / 90.88% branches / 99.43% functions**.
+  `RazorpayGateway` (23%) and the Razorpay branch of `gatewayRegistryProvider` (62%) are
+  the expected exception — untested by design, per the "fake gateway for all tests"
+  instruction, not a quality gap.
+
+### Known gaps / follow-ups
+
+- Refunds don't cascade to `Order` status (stays wherever it was).
+- No `GET /payments` / `GET /payments/:id` list-or-read endpoint — nothing in this stage's
+  acceptance criteria needed one yet.
+- Carrying forward unchanged: Stage 2's `POST /merchants` auth gate (decision 003).
+
+### Decisions
+
+- [`docs/decisions/005-stage4-payments.md`](docs/decisions/005-stage4-payments.md)
+
 ## Action items for later stages
 
 Tracked here so they don't get lost between stages:
@@ -402,3 +494,5 @@ Tracked here so they don't get lost between stages:
 - **Stage 9 (hardening)**: revisit refresh-token/OTP-verify behavior under real load
   (the race-safety fix above closes the correctness gap; load testing should confirm no
   new contention bottleneck was introduced by the atomic claim pattern).
+- **Stage 6 or later**: when the checkout web app exists, replace `CHECKOUT_BASE_URL`'s
+  placeholder with the real deployed checkout URL for Razorpay's `checkoutUrl` construction.

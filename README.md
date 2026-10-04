@@ -53,7 +53,29 @@ curl -X POST localhost:3000/orders -H "x-api-key: <apiKey>" -H "Idempotency-Key:
   -H "Content-Type: application/json" -d '{"cartSessionId":"<cartId>"}'
 curl -X POST localhost:3000/orders/<orderId>/transition -H "x-api-key: <apiKey>" \
   -H "Content-Type: application/json" -d '{"to":"payment_pending"}'
+
+# Payments (see docs/api/payments.openapi.yaml) — routes to the fake gateway unless real
+# Razorpay sandbox keys are set (see "Payments" below)
+curl -X POST localhost:3000/payments -H "x-api-key: <apiKey>" -H "Content-Type: application/json" \
+  -d '{"orderId":"<orderId>","method":"upi"}'
 ```
+
+### Payments
+
+Every test runs against an in-memory fake gateway — no sandbox credentials are required to
+develop or test this project. To enable the real Razorpay sandbox gateway, set in `.env`:
+
+```bash
+RAZORPAY_KEY_ID=rzp_test_xxxxxxxxxxxx
+RAZORPAY_KEY_SECRET=...
+RAZORPAY_WEBHOOK_SECRET=...
+```
+
+Generate these from the [Razorpay dashboard](https://dashboard.razorpay.com) in **Test
+Mode**: `Settings → API Keys → Generate Test Key` for the first two, and
+`Settings → Webhooks → Add New Webhook` (test mode) for the webhook secret. If any of the
+three are missing, `POST /payments` falls back to the fake gateway automatically — nothing
+breaks, it just never talks to a real sandbox.
 
 ### Running database migrations
 
