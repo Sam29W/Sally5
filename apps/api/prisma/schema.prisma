@@ -190,6 +190,7 @@ model Order {
   createdAt      DateTime     @default(now()) @map("created_at")
   updatedAt      DateTime     @updatedAt @map("updated_at")
   outboxEvents   OutboxEvent[]
+  payments       Payment[]
 
   @@map("orders")
   @@unique([merchantId, idempotencyKey])
@@ -214,4 +215,42 @@ model OutboxEvent {
 
   @@map("outbox_events")
   @@index([publishedAt])
+}
+
+enum PaymentStatus {
+  pending
+  captured
+  failed
+  refunded
+}
+
+model Payment {
+  id               String        @id @default(uuid())
+  orderId          String        @map("order_id")
+  order            Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  // Which PaymentGateway implementation handled this payment — "fake" in every test, the
+  // real gateway's name ("razorpay") only outside tests.
+  gateway          String
+  // The gateway's own id for this payment — never a card/UPI number, never raw PAN. No
+  // card data of any kind is ever stored here or anywhere else in this schema.
+  gatewayPaymentId String        @unique @map("gateway_payment_id")
+  status           PaymentStatus @default(pending)
+  amountCents      Int           @map("amount_cents")
+  createdAt        DateTime      @default(now()) @map("created_at")
+  updatedAt        DateTime      @updatedAt @map("updated_at")
+
+  @@map("payments")
+  @@index([orderId])
+  @@index([status])
+}
+
+// Dedups webhook deliveries per gateway so a duplicate or replayed delivery can never be
+// processed twice — this is the idempotency guard for POST /payments/webhook/:gateway.
+model ProcessedWebhookEvent {
+  gateway    String
+  eventId    String   @map("event_id")
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@id([gateway, eventId])
+  @@map("processed_webhook_events")
 }

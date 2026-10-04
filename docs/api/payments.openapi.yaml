@@ -1,0 +1,93 @@
+openapi: 3.0.3
+info:
+  title: CheckoutKit Payments API
+  version: 0.1.0
+paths:
+  /payments:
+    post:
+      summary: Create a payment for an order (routes to a gateway, never touches card data)
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderId]
+              properties:
+                orderId:
+                  type: string
+                method:
+                  type: string
+                  enum: [card, upi, netbanking]
+                  default: upi
+      responses:
+        "201":
+          description: Payment created in `pending` status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "404":
+          description: Order not found (including when it belongs to a different merchant)
+        "409":
+          description: Order is not in a state that can accept a new payment
+  /payments/{id}/refund:
+    post:
+      summary: Refund a captured payment (against the fake gateway in tests, the real gateway's sandbox otherwise)
+      security:
+        - apiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Refunded
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Payment"
+        "404":
+          description: Not found (including when it belongs to a different merchant)
+        "409":
+          description: Payment is not in `captured` status
+  /payments/webhook/{gateway}:
+    post:
+      summary: Gateway webhook receiver — no API key (the gateway calls this, not a merchant); authenticated by the gateway's own signature scheme instead
+      parameters:
+        - name: gateway
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [fake, razorpay]
+      responses:
+        "200":
+          description: Processed (or already-processed — duplicates are a no-op, not an error)
+        "401":
+          description: Signature verification failed
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+  schemas:
+    Payment:
+      type: object
+      properties:
+        id:
+          type: string
+        orderId:
+          type: string
+        gateway:
+          type: string
+        status:
+          type: string
+          enum: [pending, captured, failed, refunded]
+        amountCents:
+          type: integer
