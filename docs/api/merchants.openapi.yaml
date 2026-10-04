@@ -1,0 +1,105 @@
+openapi: 3.0.3
+info:
+  title: CheckoutKit Merchants API
+  version: 0.1.0
+paths:
+  /merchants:
+    post:
+      summary: Create a merchant and its first API key (dev/bootstrap only — no auth gate yet)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        "201":
+          description: Merchant created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  merchantId:
+                    type: string
+                  apiKey:
+                    type: string
+                    description: Full secret — shown exactly once, never retrievable again
+  /merchants/api-keys/rotate:
+    post:
+      summary: Rotate the calling merchant's API key (old key revoked immediately)
+      security:
+        - apiKey: []
+      responses:
+        "201":
+          description: New API key issued
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  apiKey:
+                    type: string
+  /webhooks:
+    post:
+      summary: Register a webhook endpoint for the calling merchant
+      security:
+        - apiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url:
+                  type: string
+      responses:
+        "201":
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  url:
+                    type: string
+                  signingSecret:
+                    type: string
+                    description: Shown exactly once, never retrievable again
+    get:
+      summary: List the calling merchant's webhook endpoints
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Webhook endpoints belonging to the authenticated merchant only
+  /webhooks/{id}:
+    delete:
+      summary: Delete a webhook endpoint belonging to the calling merchant
+      security:
+        - apiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found (including when it belongs to a different merchant)
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: x-api-key

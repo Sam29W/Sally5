@@ -24,6 +24,36 @@ interface OtpState {
   createdAt: number;
 }
 
+enum VerifyOutcome {
+  Expired = "0",
+  Locked = "1",
+  Mismatch = "2",
+  Success = "3",
+}
+
+// Redis executes a single EVAL atomically (single-threaded), so this closes the TOCTOU
+// window a plain GET-then-SET verify would have under concurrent requests with the same
+// code: two parallel calls can no longer both observe "not yet locked/used" and both act
+// on it. All three outcomes (lock, mismatch+increment, success+delete) happen in one step.
+const VERIFY_SCRIPT = `
+local raw = redis.call('GET', KEYS[1])
+if not raw then return '${VerifyOutcome.Expired}' end
+local state = cjson.decode(raw)
+if state.attempts >= tonumber(ARGV[2]) then
+  redis.call('DEL', KEYS[1])
+  return '${VerifyOutcome.Locked}'
+end
+if state.codeHash ~= ARGV[1] then
+  state.attempts = state.attempts + 1
+  local ttl = redis.call('TTL', KEYS[1])
+  if ttl < 1 then ttl = 1 end
+  redis.call('SET', KEYS[1], cjson.encode(state), 'EX', ttl)
+  return '${VerifyOutcome.Mismatch}'
+end
+redis.call('DEL', KEYS[1])
+return '${VerifyOutcome.Success}'
+`;
+
 @Injectable()
 export class OtpService {
   constructor(
@@ -80,29 +110,29 @@ export class OtpService {
     return code;
   }
 
-  /** Verifies `code` for `phoneHash`. Throws on mismatch, expiry, reuse, or too many attempts. */
+  /** Verifies `code` for `phoneHash`. Throws on mismatch, expiry, reuse, or too many attempts.
+   * Atomic (see VERIFY_SCRIPT) — safe under concurrent verify calls for the same phone. */
   async verify(phoneHash: string, code: string): Promise<void> {
     const key = otpStateKey(phoneHash);
-    const raw = await this.redis.get(key);
-    if (!raw) {
-      throw new OtpInvalidError("OTP expired or not requested");
-    }
-    const state = JSON.parse(raw) as OtpState;
-
-    if (state.attempts >= this.config.OTP_MAX_ATTEMPTS) {
-      await this.redis.del(key);
-      throw new OtpLockedError("Too many failed attempts — request a new OTP");
-    }
-
     const candidateHash = this.hashOtp(code, phoneHash);
-    if (candidateHash !== state.codeHash) {
-      state.attempts += 1;
-      const ttl = await this.redis.ttl(key);
-      await this.redis.set(key, JSON.stringify(state), "EX", ttl > 0 ? ttl : 1);
-      throw new OtpInvalidError("Incorrect OTP");
-    }
 
-    // Single use: delete immediately on success so a captured/replayed code can never verify again.
-    await this.redis.del(key);
+    const outcome = (await this.redis.eval(
+      VERIFY_SCRIPT,
+      1,
+      key,
+      candidateHash,
+      this.config.OTP_MAX_ATTEMPTS,
+    )) as VerifyOutcome;
+
+    switch (outcome) {
+      case VerifyOutcome.Expired:
+        throw new OtpInvalidError("OTP expired or not requested");
+      case VerifyOutcome.Locked:
+        throw new OtpLockedError("Too many failed attempts — request a new OTP");
+      case VerifyOutcome.Mismatch:
+        throw new OtpInvalidError("Incorrect OTP");
+      case VerifyOutcome.Success:
+        return;
+    }
   }
 }

@@ -1,0 +1,155 @@
+openapi: 3.0.3
+info:
+  title: CheckoutKit Shopper API
+  version: 0.1.0
+paths:
+  /shopper/addresses:
+    post:
+      summary: Add an address for the authenticated shopper
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressInput"
+      responses:
+        "201":
+          description: Address created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Address"
+    get:
+      summary: List the authenticated shopper's addresses
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Addresses belonging to the authenticated shopper only
+  /shopper/addresses/{id}:
+    patch:
+      summary: Update one of the authenticated shopper's addresses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddressInput"
+      responses:
+        "200":
+          description: Updated
+        "404":
+          description: Not found (including when it belongs to a different shopper)
+    delete:
+      summary: Delete one of the authenticated shopper's addresses
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found (including when it belongs to a different shopper)
+  /shopper/addresses/{id}/default:
+    post:
+      summary: Mark one of the authenticated shopper's addresses as the default
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Updated
+  /shopper/addresses/{id}/share:
+    post:
+      summary: Grant a merchant consent to reuse this address
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [merchantId]
+              properties:
+                merchantId:
+                  type: string
+      responses:
+        "201":
+          description: Consent recorded
+  /shopper/me/export:
+    get:
+      summary: Export all data held about the authenticated shopper (DPDP data portability)
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: Full export (profile, consents, addresses)
+  /shopper/me:
+    delete:
+      summary: Delete the authenticated shopper and all associated data (DPDP erasure)
+      security:
+        - bearerAuth: []
+      responses:
+        "204":
+          description: Deleted
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    AddressInput:
+      type: object
+      required: [line1, city, state, pincode]
+      properties:
+        line1:
+          type: string
+        line2:
+          type: string
+        city:
+          type: string
+        state:
+          type: string
+        pincode:
+          type: string
+        country:
+          type: string
+          default: IN
+    Address:
+      allOf:
+        - $ref: "#/components/schemas/AddressInput"
+        - type: object
+          properties:
+            id:
+              type: string
+            isDefault:
+              type: boolean
+            qualityScore:
+              type: integer

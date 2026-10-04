@@ -1,14 +1,17 @@
 # 002: Stage 1 identity decisions
 
 ## Status
+
 Accepted
 
 ## Context
+
 Stage 1 added phone-OTP login, JWT access tokens, rotating refresh tokens with reuse
 detection, and an encrypted shopper profile. A few implementation choices and known gaps
 are recorded here.
 
 ## Decisions
+
 - **Phone encryption:** AES-256-GCM (`PHONE_ENCRYPTION_KEY`, 32-byte hex) for the
   recoverable value, HMAC-SHA256 (`PHONE_HASH_KEY`) for a separate deterministic lookup
   hash — a leaked encryption key alone can't be used to search by phone, and vice versa.
@@ -33,6 +36,7 @@ are recorded here.
   that still depends on it.
 
 ## Known gaps carried forward
+
 - **Refresh-token rotation and OTP verification are not fully race-safe.** Both do a
   read-then-write against their store (Postgres for refresh tokens, Redis for OTP state)
   without a transaction/lock, so two near-simultaneous requests with the same token/code

@@ -15,6 +15,7 @@
     "format:write": "prettier --write .",
     "typecheck": "pnpm -r run typecheck",
     "test": "pnpm -r run test",
+    "test:coverage": "pnpm -r run test:coverage",
     "secrets:scan": "gitleaks detect --source . -v",
     "prepare": "husky"
   },
