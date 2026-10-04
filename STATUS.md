@@ -260,6 +260,85 @@ Stage 9 admin-provisioning action item.
 No new decision record — this was a direct implementation of explicitly requested fixes,
 not a judgment call.
 
+## Stage 3: Cart sessions and the order domain — SHIPPED (2026-10-03)
+
+### What was built
+
+- Cart session API: `POST /carts` (merchant-scoped, computes a quote from line items — flat
+  shipping with a free-shipping threshold, a stub 10%-off coupon, 18% tax), `GET /carts/:id`.
+  Pure quote math in [cart-quote.ts](apps/api/src/cart/cart-quote.ts).
+- Order domain: `POST /orders` (idempotent per `(merchantId, Idempotency-Key)`),
+  `GET /orders/:id`, `POST /orders/:id/transition`. The legal-transition table lives in one
+  place, [order-state-machine.ts](apps/api/src/order/order-state-machine.ts):
+  `created → payment_pending → paid | cod_confirmed → fulfilled → delivered | rto`, plus
+  `cancelled` from `created` or `payment_pending`; `delivered`/`rto`/`cancelled` are terminal.
+- Outbox pattern: every order-mutating write inserts its event row in the same
+  `prisma.$transaction` as the order write (never a separate Kafka call in that path).
+  `OutboxService.publishPending()` is the only thing that talks to Kafka, reading
+  unpublished rows and marking them published after a successful send — this is what makes
+  the write and the event unable to diverge even across a crash (see decision 004).
+- Closed the Stage 2 gap: `GET /merchants/shoppers/:shopperId/addresses` — a merchant sees
+  only addresses explicitly shared with it via `AddressShare`; an empty array otherwise,
+  never an error that would leak the shopper's existence.
+- Contract: [`docs/api/orders.openapi.yaml`](docs/api/orders.openapi.yaml).
+- Migration `20261003130231_cart_order_outbox` for `cart_sessions`, `orders`,
+  `outbox_events`.
+
+### What was verified
+
+- Typecheck, lint, format all clean.
+- Migrations: applied, reset/rolled back, reapplied against live Postgres — clean, all 3
+  migrations replay cleanly from scratch.
+- `pnpm audit`: no new findings from `kafkajs` (21, unchanged).
+- `gitleaks`: only the local, gitignored `.env` flagged — nothing in git.
+- Found and fixed two real bugs during verification, not just gaps:
+  1. The order-transition endpoint defaulted to Nest's `201` for POST; fixed to `200` to
+     match the documented contract (same class of mismatch caught in Stage 1).
+  2. Redpanda was advertising its in-compose-network hostname (`redpanda:9092`) to clients,
+     which broke every kafkajs reconnect after the first — fixed to advertise `localhost`,
+     since nothing that talks to this dev stack runs inside the compose network.
+- Found and fixed a real idempotency race while writing the concurrency test for it: two
+  concurrent `POST /orders` calls with the same brand-new idempotency key could both pass
+  the pre-check and race to insert; the loser now catches the unique-constraint violation
+  and returns the winner's order instead of erroring. See decision 004.
+
+### Test results
+
+- **Order state machine**: 66 table-driven tests — every legal transition in the 8×8 status
+  matrix allowed, every one of the remaining 56 pairs rejected, terminal states proven to
+  have zero legal outgoing transitions.
+- **Cart quote**: 7 pure-function tests (subtotal, flat shipping, free-shipping threshold,
+  coupon case-insensitivity, unrecognized coupon, tax-on-discounted-subtotal, determinism).
+- **Idempotent order creation**: sequential replay returns the same order; **5 parallel
+  calls with the same never-before-seen key create exactly 1 order** (the race-safety fix
+  above, proven, not just claimed).
+- **Outbox durability**: an event written but never published survives and is still
+  deliverable on a later `publishPending()` call (the literal "kill the process between
+  write and publish" scenario, proven against real Postgres); repeated `publishPending()`
+  calls don't resend already-published events; an event is shown actually arriving on the
+  real Redpanda topic with the right shape via a live consumer.
+- **Consent-gated shared-address read** (explicitly requested): a merchant with no consent
+  sees `[]`; after the shopper grants consent via `POST /shopper/addresses/:id/share`, that
+  merchant — and only that merchant — can read the address; a second, never-granted
+  merchant still sees `[]` even though the address now has a share for someone else.
+- Full workspace suite (`pnpm run test`): **149/149** passing (138 in `apps/api`, up from
+  47 before Stage 3's fixups + 91 new; 11 unchanged in `packages/config`), 0 flaky, run
+  twice.
+- Coverage: `apps/api` **97.17% statements / 94.3% branches / 100% functions**;
+  `src/cart` and `src/order` are both 100%. `packages/config` unchanged at 97.1%.
+
+### Known gaps / follow-ups
+
+- No scheduled outbox publisher yet — `publishPending()` is only ever called directly (by
+  tests). Needs a lightweight poller or real CDC before this matters in a deployed
+  environment. Added to the Stage 9 action items below.
+- Carrying forward unchanged: Stage 2's `POST /merchants` auth gate (decision 003); Stage
+  1's remaining non-blocking notes (decision 002).
+
+### Decisions
+
+- [`docs/decisions/004-stage3-cart-order-outbox.md`](docs/decisions/004-stage3-cart-order-outbox.md)
+
 ## Action items for later stages
 
 Tracked here so they don't get lost between stages:
@@ -270,3 +349,6 @@ Tracked here so they don't get lost between stages:
 - **Stage 9 (hardening)**: revisit refresh-token/OTP-verify behavior under real load
   (the race-safety fix above closes the correctness gap; load testing should confirm no
   new contention bottleneck was introduced by the atomic claim pattern).
+- **Stage 9 (hardening)**: wire a real scheduled outbox publisher (timer-based poll or
+  Postgres `LISTEN`/`NOTIFY`-triggered) — Stage 3 proved the write-side durability
+  guarantee but nothing currently calls `publishPending()` outside of tests.

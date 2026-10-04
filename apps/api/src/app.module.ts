@@ -7,16 +7,24 @@ import { AuthModule } from "./auth/auth.module.js";
 import { MerchantModule } from "./merchant/merchant.module.js";
 import { WebhookModule } from "./webhook/webhook.module.js";
 import { AddressModule } from "./address/address.module.js";
+import { KafkaModule } from "./kafka/kafka.module.js";
+import { CartModule } from "./cart/cart.module.js";
+import { OrderModule } from "./order/order.module.js";
+import { OutboxModule } from "./outbox/outbox.module.js";
 
 @Module({
   imports: [
     CoreModule,
     PrismaModule,
     RedisModule,
+    KafkaModule,
     AuthModule,
     MerchantModule,
     WebhookModule,
     AddressModule,
+    CartModule,
+    OrderModule,
+    OutboxModule,
   ],
   controllers: [HealthController],
 })
