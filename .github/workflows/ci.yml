@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main"]
   pull_request:
+  workflow_dispatch:
 
 jobs:
   gitleaks:
@@ -34,6 +35,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Load dev env vars (non-secret placeholders, see .env.example)
+        run: grep -v '^#' .env.example | grep -v '^$' >> "$GITHUB_ENV"
+
+      - name: Start Postgres, Redis, and Redpanda
+        run: docker compose -f infra/docker-compose.yml up -d --wait
+
+      - name: Generate Prisma client
+        working-directory: apps/api
+        run: npx prisma generate
+
+      - name: Apply database migrations
+        working-directory: apps/api
+        run: npx prisma migrate deploy
+
       - name: Lint
         run: pnpm run lint
 
@@ -48,3 +63,7 @@ jobs:
 
       - name: Build
         run: pnpm run build
+
+      - name: Stop infra
+        if: always()
+        run: docker compose -f infra/docker-compose.yml down
