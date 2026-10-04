@@ -329,15 +329,68 @@ not a judgment call.
 
 ### Known gaps / follow-ups
 
-- No scheduled outbox publisher yet — `publishPending()` is only ever called directly (by
-  tests). Needs a lightweight poller or real CDC before this matters in a deployed
-  environment. Added to the Stage 9 action items below.
 - Carrying forward unchanged: Stage 2's `POST /merchants` auth gate (decision 003); Stage
   1's remaining non-blocking notes (decision 002).
 
 ### Decisions
 
 - [`docs/decisions/004-stage3-cart-order-outbox.md`](docs/decisions/004-stage3-cart-order-outbox.md)
+
+## Fixups before Stage 4 — SHIPPED (2026-10-04)
+
+Requested explicitly before starting Stage 4: merge all stage branches into `main` in
+order and make it the default branch, build the scheduled outbox publisher the Stage 3
+gap called for, and confirm CI is green on GitHub.
+
+### What was built
+
+- `main` created from `stage/0-foundation`, then `stage/1-identity`, `stage/2-merchants-addresses`
+  (which already contained the race-safety/trust-proxy/coverage fixup branch), and
+  `stage/3-cart-orders` merged in with `--no-ff`, in that order. No conflicts — content on
+  `main` is byte-identical to the tip of `stage/3-cart-orders`. Default branch on GitHub
+  set to `main`.
+- `OutboxPublisherScheduler`
+  ([outbox-publisher-scheduler.service.ts](apps/api/src/outbox/outbox-publisher-scheduler.service.ts)):
+  a `setInterval`-based poller (not `@nestjs/schedule`, since its `@Interval()` decorator
+  argument is fixed at class-decoration time and can't read the new `OUTBOX_PUBLISH_INTERVAL_MS`
+  env var at runtime). Started in `OnModuleInit`, stopped in `OnModuleDestroy`, disabled
+  outright when `NODE_ENV=test`. A failed drain pass is logged and swallowed — the next
+  tick just retries, and nothing is lost either way.
+
+### What was verified
+
+- Typecheck, lint, format all clean.
+- Verified live against a running instance (not just tests): created a real order,
+  confirmed its outbox row was unpublished, waited for the next scheduled tick (no manual
+  call), and confirmed `published_at` was set — the full loop works end-to-end with zero
+  manual intervention.
+- **CI confirmed green on GitHub** after pushing `main` — see the Actions run for this
+  push.
+
+### Test results
+
+- **Crash-mid-batch durability** (explicitly requested): 3 orders queued, the 2nd Kafka
+  send forced to throw (simulating a crash partway through a batch) — the 1st event ends
+  up published, the 2nd and 3rd stay unpublished; a second run with a healthy producer
+  (simulating "the process restarted") finishes the remaining 2, and the already-published
+  one is left untouched.
+- `start()`/`stop()` are idempotent; `onModuleInit` is a no-op under `NODE_ENV=test`.
+- Full workspace suite: **152/152** passing (141 in `apps/api`, up from 138 + 3 new; 11
+  unchanged in `packages/config`), 0 flaky, run twice.
+- Coverage: `apps/api` **96.85% statements / 93.89% branches / 100% functions** — the only
+  dip from Stage 3's 97.17% is the new scheduler's actual `setInterval` tick path and its
+  `clearInterval` branch, neither of which a unit test lets a real timer fire for (covered
+  indirectly by the live verification above instead).
+
+### Known gaps / follow-ups
+
+- Carrying forward unchanged: Stage 2's `POST /merchants` auth gate (decision 003); Stage
+  1's remaining non-blocking notes (decision 002).
+
+### Decisions
+
+- Folded into [`docs/decisions/004-stage3-cart-order-outbox.md`](docs/decisions/004-stage3-cart-order-outbox.md)
+  (updated, not a new record — this closes a gap that decision already described).
 
 ## Action items for later stages
 
@@ -349,6 +402,3 @@ Tracked here so they don't get lost between stages:
 - **Stage 9 (hardening)**: revisit refresh-token/OTP-verify behavior under real load
   (the race-safety fix above closes the correctness gap; load testing should confirm no
   new contention bottleneck was introduced by the atomic claim pattern).
-- **Stage 9 (hardening)**: wire a real scheduled outbox publisher (timer-based poll or
-  Postgres `LISTEN`/`NOTIFY`-triggered) — Stage 3 proved the write-side durability
-  guarantee but nothing currently calls `publishPending()` outside of tests.
