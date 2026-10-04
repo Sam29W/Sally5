@@ -4,6 +4,9 @@ title = "CheckoutKit gitleaks config"
 useDefault = true
 
 [allowlist]
+# .env.example is an intentional, non-secret template — its placeholder values are
+# generated locally and documented as dev-only in the file itself, never real credentials.
 paths = [
   '''pnpm-lock\.yaml''',
+  '''\.env\.example''',
 ]

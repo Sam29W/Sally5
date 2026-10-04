@@ -1,0 +1,112 @@
+openapi: 3.0.3
+info:
+  title: CheckoutKit Auth API
+  version: 0.1.0
+paths:
+  /auth/otp/request:
+    post:
+      summary: Request an OTP for a phone number
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone]
+              properties:
+                phone:
+                  type: string
+                  description: E.164 phone number, e.g. +919876543210
+      responses:
+        "200":
+          description: OTP sent (or resend-cooldown active — same response either way)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [sent]
+                  resendAvailableInSeconds:
+                    type: integer
+        "429":
+          description: Rate limit exceeded (per-phone or per-IP)
+  /auth/otp/verify:
+    post:
+      summary: Verify an OTP and issue tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [phone, otp]
+              properties:
+                phone:
+                  type: string
+                otp:
+                  type: string
+                  pattern: "^[0-9]{6}$"
+      responses:
+        "200":
+          description: OTP valid — shopper authenticated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: OTP invalid, expired, or already used
+        "429":
+          description: Too many failed attempts — OTP locked
+  /auth/refresh:
+    post:
+      summary: Rotate a refresh token for a new token pair
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "200":
+          description: New token pair issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenPair"
+        "401":
+          description: Refresh token invalid, expired, or reused (session family revoked)
+  /auth/logout:
+    post:
+      summary: Revoke the current session family
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refreshToken]
+              properties:
+                refreshToken:
+                  type: string
+      responses:
+        "204":
+          description: Session family revoked
+        "400":
+          description: Refresh token not found or malformed
+components:
+  schemas:
+    TokenPair:
+      type: object
+      properties:
+        accessToken:
+          type: string
+        refreshToken:
+          type: string
+        expiresInSeconds:
+          type: integer
