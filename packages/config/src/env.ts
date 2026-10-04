@@ -27,6 +27,10 @@ const envSchema = z.object({
   // address and X-Forwarded-For is ignored, so it can't be spoofed to bypass per-IP rate
   // limiting. Set to the real hop count only once this sits behind a load balancer.
   TRUST_PROXY_HOPS: z.coerce.number().int().nonnegative().default(0),
+  // How often the background job drains unpublished outbox rows to Kafka. Disabled
+  // (never runs) in NODE_ENV=test — tests call OutboxService.publishPending() directly so
+  // they aren't racing a background timer.
+  OUTBOX_PUBLISH_INTERVAL_MS: z.coerce.number().int().positive().default(5000),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

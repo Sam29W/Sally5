@@ -46,11 +46,19 @@ the `AddressShare` consent table existed but nothing read it.
   is enforced in the query itself (`shares: { some: { merchantId } }`), not as a
   post-fetch check.
 
+- **Scheduled outbox publisher** ([outbox-publisher-scheduler.service.ts](../../apps/api/src/outbox/outbox-publisher-scheduler.service.ts)):
+  a plain `setInterval`, not `@nestjs/schedule` — the interval period comes from
+  `OUTBOX_PUBLISH_INTERVAL_MS`, a runtime env var, and `@Interval()`'s decorator argument is
+  fixed at class-decoration time, so it can't read config. Started from `OnModuleInit`,
+  stopped from `OnModuleDestroy`. A failed drain pass is logged and swallowed, not
+  rethrown — nothing is lost either way (unpublished rows stay unpublished, already-published
+  rows stay published), and the next tick just picks up where the failed one left off.
+  Explicitly disabled when `NODE_ENV=test` so it can't race test assertions or
+  double-publish into a shared Kafka topic while tests are driving `OutboxService` directly.
+  Verified live: created a real order against a running instance, waited for the next
+  scheduled tick, confirmed `published_at` was set with zero manual intervention.
+
 ## Known gaps carried forward
 
-- **No scheduled outbox publisher yet** — `OutboxService.publishPending()` is called
-  directly in tests but nothing invokes it on a timer or via Postgres `LISTEN`/`NOTIFY` in
-  the running app. Needs a lightweight poller (or a proper CDC/Debezium setup) before this
-  is useful in a real deployment — tracked for Stage 9.
 - Carrying forward unchanged: Stage 2's `POST /merchants` auth gate, Stage 1's `trust
 proxy`/race-safety notes already fixed where explicitly requested — see decisions 002 and 003.
