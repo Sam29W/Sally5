@@ -55,14 +55,17 @@ jobs:
       - name: Format check
         run: pnpm run format
 
+      # Workspace packages (@app/config, @app/shared) publish their types from dist/, so
+      # apps/api can't typecheck or run against them until they've been built at least
+      # once — build has to come before typecheck and test, not after.
+      - name: Build
+        run: pnpm run build
+
       - name: Typecheck
         run: pnpm run typecheck
 
       - name: Test
         run: pnpm run test
-
-      - name: Build
-        run: pnpm run build
 
       - name: Stop infra
         if: always()
