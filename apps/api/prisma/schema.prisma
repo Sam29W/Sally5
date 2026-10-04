@@ -31,6 +31,7 @@ model Merchant {
   addressShares    AddressShare[]
   cartSessions     CartSession[]
   orders           Order[]
+  codRiskConfig    CodRiskConfig?
 
   @@map("merchants")
 }
@@ -191,6 +192,8 @@ model Order {
   updatedAt      DateTime     @updatedAt @map("updated_at")
   outboxEvents   OutboxEvent[]
   payments       Payment[]
+  codRiskDecisions CodRiskDecision[]
+  codRiskOutcome   CodRiskOutcome?
 
   @@map("orders")
   @@unique([merchantId, idempotencyKey])
@@ -253,4 +256,62 @@ model ProcessedWebhookEvent {
 
   @@id([gateway, eventId])
   @@map("processed_webhook_events")
+}
+
+// Per-merchant tunables for the COD risk rules engine. Every field has a sensible default
+// so a merchant that never configures this still gets a working engine.
+model CodRiskConfig {
+  merchantId                 String   @id @map("merchant_id")
+  merchant                   Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  highValueThresholdCents    Int      @default(500000) @map("high_value_threshold_cents")
+  lowAddressQualityThreshold Int      @default(50) @map("low_address_quality_threshold")
+  riskyHourStart             Int      @default(0) @map("risky_hour_start")
+  riskyHourEnd               Int      @default(5) @map("risky_hour_end")
+  velocityThreshold          Int      @default(3) @map("velocity_threshold")
+  lowBandMax                 Int      @default(39) @map("low_band_max")
+  mediumBandMax              Int      @default(69) @map("medium_band_max")
+  // Pincodes/phone hashes below are merchant-defined and never shown to any other
+  // merchant — see CodRiskService, which only ever emits the generic reason string
+  // "merchant blocklist match", never the matched value itself.
+  highRtoPincodes            String[] @default([]) @map("high_rto_pincodes")
+  blockedPincodes            String[] @default([]) @map("blocked_pincodes")
+  blockedPhoneHashes         String[] @default([]) @map("blocked_phone_hashes")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  @@map("cod_risk_configs")
+}
+
+// One row per scoring call — the audit trail: exactly what rule version, inputs, and
+// reasons produced this decision. `inputs` is scoped to this one order/shopper only, so
+// there's nothing here that could ever leak another merchant's data.
+model CodRiskDecision {
+  id          String   @id @default(uuid())
+  orderId     String   @map("order_id")
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  merchantId  String   @map("merchant_id")
+  score       Int
+  band        String
+  action      String
+  reasons     Json
+  ruleVersion String   @map("rule_version")
+  inputs      Json
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  @@map("cod_risk_decisions")
+  @@index([orderId])
+  @@index([merchantId])
+}
+
+// Feeds the labeled dataset for a future model — delivered vs RTO per order. The model
+// itself is explicitly out of scope for this stage; this table just makes the labels
+// exist somewhere once Stage 9+ wants to build one.
+model CodRiskOutcome {
+  id         String   @id @default(uuid())
+  orderId    String   @unique @map("order_id")
+  order      Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  delivered  Boolean
+  recordedAt DateTime @default(now()) @map("recorded_at")
+
+  @@map("cod_risk_outcomes")
 }

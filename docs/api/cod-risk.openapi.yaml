@@ -1,0 +1,112 @@
+openapi: 3.0.3
+info:
+  title: CheckoutKit COD Risk API
+  version: 0.1.0
+paths:
+  /orders/{id}/cod-risk/score:
+    post:
+      summary: Score an order's COD risk (deterministic, versioned, explainable)
+      security:
+        - apiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [addressId]
+              properties:
+                addressId:
+                  type: string
+      responses:
+        "201":
+          description: Decision computed and persisted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CodRiskDecision"
+        "404":
+          description: Order or address not found
+  /orders/{id}/cod-risk:
+    get:
+      summary: List the risk decisions recorded for an order (audit trail)
+      security:
+        - apiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Decisions, oldest first
+  /orders/{id}/cod-risk/outcome:
+    post:
+      summary: Record whether this order was delivered or RTO'd (feeds the labeled dataset)
+      security:
+        - apiKey: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [delivered]
+              properties:
+                delivered:
+                  type: boolean
+      responses:
+        "201":
+          description: Recorded
+  /merchants/cod-risk-config:
+    get:
+      summary: Fetch the calling merchant's COD risk thresholds (defaults if never configured)
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Config
+    put:
+      summary: Update the calling merchant's COD risk thresholds (partial update, upsert)
+      security:
+        - apiKey: []
+      responses:
+        "200":
+          description: Updated config
+components:
+  securitySchemes:
+    apiKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+  schemas:
+    CodRiskDecision:
+      type: object
+      properties:
+        score:
+          type: integer
+        band:
+          type: string
+          enum: [low, medium, high]
+        action:
+          type: string
+          enum: [allow, verify, nudge_to_prepaid, block]
+        reasons:
+          type: array
+          items:
+            type: string
+        ruleVersion:
+          type: string

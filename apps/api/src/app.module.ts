@@ -12,6 +12,7 @@ import { CartModule } from "./cart/cart.module.js";
 import { OrderModule } from "./order/order.module.js";
 import { OutboxModule } from "./outbox/outbox.module.js";
 import { PaymentModule } from "./payment/payment.module.js";
+import { CodRiskModule } from "./cod-risk/cod-risk.module.js";
 
 @Module({
   imports: [
@@ -27,6 +28,7 @@ import { PaymentModule } from "./payment/payment.module.js";
     OrderModule,
     OutboxModule,
     PaymentModule,
+    CodRiskModule,
   ],
   controllers: [HealthController],
 })

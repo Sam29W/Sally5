@@ -484,6 +484,70 @@ Requested before Stage 4: add `workflow_dispatch`, confirm CI is green on GitHub
 
 - [`docs/decisions/005-stage4-payments.md`](docs/decisions/005-stage4-payments.md)
 
+## Stage 5: COD risk engine — SHIPPED (2026-10-04)
+
+### What was built
+
+- Pure, versioned rules engine ([cod-risk-engine.ts](apps/api/src/cod-risk/cod-risk-engine.ts)):
+  7 independent signals, each its own file under
+  [rules/](apps/api/src/cod-risk/rules) — new-vs-repeat phone, order value, pincode RTO
+  history, address quality, time of day (wraps past midnight correctly), order velocity,
+  merchant blocklist (forces `action=block` regardless of score). Output
+  `{score, band, action, reasons[], ruleVersion}`.
+- Per-merchant config (`CodRiskConfig`, sensible defaults when unconfigured):
+  `GET`/`PUT /merchants/cod-risk-config`.
+- `POST /orders/:id/cod-risk/score` — gathers real inputs (order/address/shopper/recent
+  order count), scores, persists a `CodRiskDecision` row for audit.
+  `GET /orders/:id/cod-risk` — the audit trail. `POST /orders/:id/cod-risk/outcome` —
+  records delivered/RTO to seed a future labeled dataset (no model built — explicitly out
+  of scope).
+- Contract: [`docs/api/cod-risk.openapi.yaml`](docs/api/cod-risk.openapi.yaml).
+- Migration `20261004122454_cod_risk` for `cod_risk_configs`, `cod_risk_decisions`,
+  `cod_risk_outcomes`.
+
+### What was verified
+
+- Typecheck, lint, format all clean.
+- Migrations: applied, reset/rolled back, reapplied — all 5 replay clean.
+- `pnpm audit` / `gitleaks`: no new findings.
+- Found and fixed a real bug while testing `CodRiskConfigService`: TypeScript's
+  `useDefineForClassFields` semantics mean a DTO's unset optional fields are own
+  properties with value `undefined`, so a naive object-spread merge for partial config
+  updates silently reset every field the caller didn't send. Fixed and proved live: two
+  sequential `PUT` calls, each changing a different field, both took effect.
+- Live, not just tests: fetched a merchant's default config with zero configuration;
+  configured a blocklist, then updated an unrelated field, confirmed the blocklist
+  survived the second update.
+
+### Test results
+
+- **Each rule individually unit-tested** — 7 rules, each verified to fire exactly when its
+  condition holds and stay silent otherwise, including the midnight-wrap edge case for
+  the time-of-day rule.
+- **Determinism**: same input + config → byte-identical decision, asserted directly.
+- **Reasons never expose another merchant's data**: proven two ways — (1) by construction,
+  every reason string is a fixed generic sentence, never the matched pincode/phone/value;
+  (2) by test, merchant A's blocklist has zero effect on merchant B's scoring of the exact
+  same pincode.
+- **Latency**: p95 = **0.0013ms** over 5,000 calls to the pure scoring function — far under
+  the 50ms budget (the full HTTP endpoint's DB-read latency isn't part of this number; see
+  decision 006's known gaps).
+- Full workspace suite: **200/200** passing (189 in `apps/api`, up from 166 + 23 new; 11
+  unchanged in `packages/config`), 0 flaky, run twice.
+- Coverage: `apps/api` **93.72% statements / 91.48% branches / 99.51% functions**.
+  `src/cod-risk/rules` is 100%.
+
+### Known gaps / follow-ups
+
+- The 50ms benchmark covers the pure function only, not the full DB-backed HTTP endpoint —
+  a real end-to-end load test belongs in Stage 9.
+- No automatic wiring into checkout — scoring is a standalone call for Stage 6 to invoke.
+- Carrying forward unchanged: Stage 2's `POST /merchants` auth gate (decision 003).
+
+### Decisions
+
+- [`docs/decisions/006-stage5-cod-risk.md`](docs/decisions/006-stage5-cod-risk.md)
+
 ## Action items for later stages
 
 Tracked here so they don't get lost between stages:
@@ -494,5 +558,7 @@ Tracked here so they don't get lost between stages:
 - **Stage 9 (hardening)**: revisit refresh-token/OTP-verify behavior under real load
   (the race-safety fix above closes the correctness gap; load testing should confirm no
   new contention bottleneck was introduced by the atomic claim pattern).
+- **Stage 9 (hardening)**: benchmark the full `POST /orders/:id/cod-risk/score` HTTP path
+  under load, not just the pure scoring function (decision 006).
 - **Stage 6 or later**: when the checkout web app exists, replace `CHECKOUT_BASE_URL`'s
   placeholder with the real deployed checkout URL for Razorpay's `checkoutUrl` construction.
