@@ -14,6 +14,10 @@ const envSchema = z.object({
   PHONE_HASH_KEY: z.string().min(32),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_ACCESS_TTL_SECONDS: z.coerce.number().int().positive().default(900),
+  // Deliberately a different secret from JWT_ACCESS_SECRET (shopper tokens) — a merchant
+  // dashboard login token must never verify as a valid shopper token, or vice versa.
+  JWT_DASHBOARD_SECRET: z.string().min(32),
+  JWT_DASHBOARD_TTL_SECONDS: z.coerce.number().int().positive().default(3600),
   JWT_REFRESH_TTL_SECONDS: z.coerce.number().int().positive().default(2592000),
   OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),

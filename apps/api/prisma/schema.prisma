@@ -33,8 +33,32 @@ model Merchant {
   orders           Order[]
   codRiskConfig    CodRiskConfig?
   shopifyShop      ShopifyShop?
+  dashboardUsers   MerchantUser[]
 
   @@map("merchants")
+}
+
+enum MerchantUserRole {
+  owner
+  ops
+  readonly
+}
+
+// Human dashboard login, separate from the merchant's own API key (machine-to-machine)
+// and from Shopper (OTP, phone-based, shopper-facing). The first owner is bootstrapped
+// using the merchant's API key as proof of ownership (see dashboard-auth.controller.ts);
+// an owner can then invite ops/readonly colleagues by email, no API key needed.
+model MerchantUser {
+  id           String           @id @default(uuid())
+  merchantId   String           @map("merchant_id")
+  merchant     Merchant         @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  email        String           @unique
+  passwordHash String           @map("password_hash")
+  role         MerchantUserRole @default(readonly)
+  createdAt    DateTime         @default(now()) @map("created_at")
+
+  @@index([merchantId])
+  @@map("merchant_users")
 }
 
 model ApiKey {

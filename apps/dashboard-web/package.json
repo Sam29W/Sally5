@@ -1,12 +1,25 @@
 {
   "name": "@app/dashboard-web",
-  "version": "0.0.0",
   "private": true,
+  "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "build": "echo \"dashboard-web: scaffolded in Stage 0, implemented in Stage 8\" && exit 0",
-    "typecheck": "echo \"dashboard-web: no typecheck yet\" && exit 0",
-    "test": "echo \"dashboard-web: no tests yet\" && exit 0",
-    "test:coverage": "echo \"dashboard-web: no tests yet\" && exit 0"
+    "dev": "vite dev",
+    "build": "vite build",
+    "preview": "vite preview",
+    "prepare": "svelte-kit sync || echo ''",
+    "typecheck": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
+    "test": "echo 'dashboard-web: no component unit tests yet, see test:e2e' && exit 0",
+    "test:e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.49.0",
+    "@sveltejs/adapter-static": "^3.0.6",
+    "@sveltejs/kit": "^3.0.1",
+    "@sveltejs/vite-plugin-svelte": "^7.2.0",
+    "svelte": "^5.57.1",
+    "svelte-check": "^4.6.0",
+    "typescript": "^5.7.2",
+    "vite": "^8.3.0"
   }
 }
