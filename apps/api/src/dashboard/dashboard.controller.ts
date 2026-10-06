@@ -8,6 +8,8 @@ import {
 } from "../dashboard-auth/guards/dashboard-auth.guard.js";
 import { DashboardService } from "./dashboard.service.js";
 import { UpdateCodRiskConfigDto } from "../cod-risk/dto/update-config.dto.js";
+import { AuditLogService } from "../audit/audit-log.service.js";
+import { auditContext } from "../audit/request-context.util.js";
 
 function parseLimit(raw: string | undefined, fallback = 50, max = 200): number {
   const parsed = raw ? Number.parseInt(raw, 10) : fallback;
@@ -23,7 +25,10 @@ function parseLimit(raw: string | undefined, fallback = 50, max = 200): number {
 @Controller("dashboard")
 @UseGuards(DashboardAuthGuard)
 export class DashboardController {
-  constructor(@Inject(DashboardService) private readonly dashboardService: DashboardService) {}
+  constructor(
+    @Inject(DashboardService) private readonly dashboardService: DashboardService,
+    @Inject(AuditLogService) private readonly auditLogService: AuditLogService,
+  ) {}
 
   @Get("orders")
   listOrders(
@@ -59,9 +64,20 @@ export class DashboardController {
 
   @Put("cod-risk-config")
   @RequireRole(MerchantUserRole.owner, MerchantUserRole.ops)
-  updateCodRiskConfig(@Body() dto: UpdateCodRiskConfigDto, @Req() req: Request) {
-    const { merchantId } = req as DashboardAuthenticatedRequest;
-    return this.dashboardService.updateCodRiskConfig(merchantId, dto);
+  async updateCodRiskConfig(@Body() dto: UpdateCodRiskConfigDto, @Req() req: Request) {
+    const { merchantId, merchantUserId } = req as DashboardAuthenticatedRequest;
+    const before = await this.dashboardService.getCodRiskConfig(merchantId);
+    const after = await this.dashboardService.updateCodRiskConfig(merchantId, dto);
+    await this.auditLogService.record({
+      merchantId,
+      actorId: merchantUserId,
+      action: "cod_risk_config.update",
+      resourceType: "cod_risk_config",
+      oldValue: before,
+      newValue: after,
+      ...auditContext(req),
+    });
+    return after;
   }
 
   @Get("api-keys")
@@ -73,9 +89,31 @@ export class DashboardController {
 
   @Post("api-keys/rotate")
   @RequireRole(MerchantUserRole.owner)
-  rotateApiKey(@Req() req: Request) {
+  async rotateApiKey(@Req() req: Request) {
+    const { merchantId, merchantUserId } = req as DashboardAuthenticatedRequest;
+    const result = await this.dashboardService.rotateApiKey(merchantId);
+    await this.auditLogService.record({
+      merchantId,
+      actorId: merchantUserId,
+      action: "api_key.rotate",
+      resourceType: "api_key",
+      newValue: { prefix: result.apiKey.split(".")[0] },
+      ...auditContext(req),
+    });
+    return result;
+  }
+
+  /** Any authenticated role can read the audit trail — knowing *that* something changed
+   * (and roughly what) is useful for ops/readonly reviewers too; the sensitive parts
+   * (API key secrets, passwords) are never recorded as values in the first place. */
+  @Get("audit-logs")
+  listAuditLogs(
+    @Query("limit") limit: string | undefined,
+    @Query("action") action: string | undefined,
+    @Req() req: Request,
+  ) {
     const { merchantId } = req as DashboardAuthenticatedRequest;
-    return this.dashboardService.rotateApiKey(merchantId);
+    return this.auditLogService.listForMerchant(merchantId, { limit: parseLimit(limit), action });
   }
 
   @Get("webhooks")

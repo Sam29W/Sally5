@@ -34,6 +34,7 @@ model Merchant {
   codRiskConfig    CodRiskConfig?
   shopifyShop      ShopifyShop?
   dashboardUsers   MerchantUser[]
+  auditLogs        AuditLog[]
 
   @@map("merchants")
 }
@@ -356,4 +357,32 @@ model ShopifyShop {
   uninstalledAt        DateTime? @map("uninstalled_at")
 
   @@map("shopify_shops")
+}
+
+// Append-only audit trail for security-sensitive dashboard actions (COD risk config
+// changes, dashboard-user invitations, and anything else that changes merchant-facing
+// configuration or access). Deliberately has no update/delete path anywhere in the
+// application code — see decision 011. `actorId` is a MerchantUser id when the actor
+// authenticated via the dashboard; left null for the one action (owner bootstrap) that
+// happens before any MerchantUser exists yet, where `actorApiKeyPrefix` identifies the
+// merchant API key used instead.
+model AuditLog {
+  id                String   @id @default(uuid())
+  merchantId        String   @map("merchant_id")
+  merchant          Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  actorId           String?  @map("actor_id")
+  actorEmail        String?  @map("actor_email")
+  actorApiKeyPrefix String?  @map("actor_api_key_prefix")
+  action            String
+  resourceType      String   @map("resource_type")
+  resourceId        String?  @map("resource_id")
+  oldValue          Json?    @map("old_value")
+  newValue          Json?    @map("new_value")
+  ipAddress         String?  @map("ip_address")
+  userAgent         String?  @map("user_agent")
+  createdAt         DateTime @default(now()) @map("created_at")
+
+  @@index([merchantId, createdAt])
+  @@index([action])
+  @@map("audit_logs")
 }

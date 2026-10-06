@@ -11,11 +11,13 @@ import {
 } from "@nestjs/common";
 import type { Request } from "express";
 import { ApiKeyGuard, type MerchantAuthenticatedRequest } from "../merchant/api-key.guard.js";
+import { RateLimitCategoryTag } from "../rate-limit/rate-limit-category.decorator.js";
 import { PaymentService } from "./payment.service.js";
 import { CreatePaymentDto } from "./dto/create-payment.dto.js";
 
 @Controller("payments")
 @UseGuards(ApiKeyGuard)
+@RateLimitCategoryTag("payments")
 export class PaymentController {
   constructor(@Inject(PaymentService) private readonly paymentService: PaymentService) {}
 

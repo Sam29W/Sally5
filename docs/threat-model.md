@@ -17,20 +17,20 @@ a pointer to where) or is a real, open gap.
 
 ## Tampering
 
-| Threat                                                                         | Mitigated?                                                                                                                                                                                 |
-| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Modifying an order total/status client-side before it's trusted                | **Yes** — all pricing is computed server-side (`cart-quote.ts`); order state transitions are centrally validated (`order-state-machine.ts`), never trusted from a client-supplied field.   |
-| Replaying or re-ordering an OTP verification request                           | **Yes** — OTP state is single-use (deleted on success) and the verify path is a single atomic Redis script, closing the TOCTOU window a naive check-then-delete would have.                |
-| Tampering with a webhook payload after it's signed                             | **Yes** — signature covers the raw, unparsed body; re-serializing JSON would change bytes and fail verification by construction.                                                           |
-| Tampering with the COD risk config to disable risk checks for one's own orders | **Partially** — writing the config is role-gated (owner/ops) behind dashboard auth, but there's no audit log of _who_ changed it or _when_, only the resulting config state. **Open gap.** |
+| Threat                                                                         | Mitigated?                                                                                                                                                                                                                                                               |
+| ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Modifying an order total/status client-side before it's trusted                | **Yes** — all pricing is computed server-side (`cart-quote.ts`); order state transitions are centrally validated (`order-state-machine.ts`), never trusted from a client-supplied field.                                                                                 |
+| Replaying or re-ordering an OTP verification request                           | **Yes** — OTP state is single-use (deleted on success) and the verify path is a single atomic Redis script, closing the TOCTOU window a naive check-then-delete would have.                                                                                              |
+| Tampering with a webhook payload after it's signed                             | **Yes** — signature covers the raw, unparsed body; re-serializing JSON would change bytes and fail verification by construction.                                                                                                                                         |
+| Tampering with the COD risk config to disable risk checks for one's own orders | **Yes, as of decision 011** — writing the config is role-gated (owner/ops) behind dashboard auth, and every change now writes an `AuditLog` row with the actor, old value, and new value ([dashboard.controller.ts](../apps/api/src/dashboard/dashboard.controller.ts)). |
 
 ## Repudiation
 
-| Threat                                                                                             | Mitigated?                                                                                                                                     |
-| -------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| A merchant disputing a COD risk decision ("the system never flagged this order")                   | **Yes** — every scoring call persists a `CodRiskDecision` row with the exact inputs, rule version, score, and reasons (immutable audit trail). |
-| A shopper disputing consent ("I never agreed to X")                                                | **Yes** — `ConsentRecord` rows are written on first login and are never deleted except via the shopper's own DPDP-style deletion request.      |
-| No request-level audit log of _admin_ actions (merchant provisioning, dashboard-user role changes) | **Open gap** — these are gated but not logged with who/when beyond the DB row's own `createdAt`.                                               |
+| Threat                                                                                             | Mitigated?                                                                                                                                                                                                                                                               |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A merchant disputing a COD risk decision ("the system never flagged this order")                   | **Yes** — every scoring call persists a `CodRiskDecision` row with the exact inputs, rule version, score, and reasons (immutable audit trail).                                                                                                                           |
+| A shopper disputing consent ("I never agreed to X")                                                | **Yes** — `ConsentRecord` rows are written on first login and are never deleted except via the shopper's own DPDP-style deletion request.                                                                                                                                |
+| No request-level audit log of _admin_ actions (merchant provisioning, dashboard-user role changes) | **Yes, as of decision 011** — `AuditLogService` records every bootstrap, invite, COD-risk-config change, and API-key rotation with actor/timestamp/IP/user-agent, queryable via `GET /dashboard/audit-logs`. Append-only by construction (no update/delete path exists). |
 
 ## Information disclosure
 
@@ -45,12 +45,12 @@ a pointer to where) or is a real, open gap.
 
 ## Denial of service
 
-| Threat                                                                      | Mitigated?                                                                                                                                                                                                                                          |
-| --------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| OTP request flooding (brute-force enumeration or SMS-cost exhaustion)       | **Yes** — per-phone and per-IP hourly rate limits, plus a resend cooldown ([otp.service.ts](../apps/api/src/auth/otp.service.ts)).                                                                                                                  |
-| OTP verify brute-forcing a 6-digit code                                     | **Yes** — max attempts before lockout, atomic check (no race to bypass the counter).                                                                                                                                                                |
-| A single merchant's traffic spike starving other merchants (noisy neighbor) | **Open gap** — no per-merchant rate limiting exists anywhere; everything is per-IP or per-phone. A real production deployment serving many merchants on shared infrastructure needs this before it's safe.                                          |
-| Outbox publisher falling behind under load, silently delaying order events  | **Partially** — the publisher retries every tick and never drops events, but there's no alerting on publish lag; an operator would only notice via the (currently nonexistent) dashboards this stage's OpenTelemetry wiring is a first step toward. |
+| Threat                                                                      | Mitigated?                                                                                                                                                                                                                                                                           |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| OTP request flooding (brute-force enumeration or SMS-cost exhaustion)       | **Yes** — per-phone and per-IP hourly rate limits, plus a resend cooldown ([otp.service.ts](../apps/api/src/auth/otp.service.ts)).                                                                                                                                                   |
+| OTP verify brute-forcing a 6-digit code                                     | **Yes** — max attempts before lockout, atomic check (no race to bypass the counter).                                                                                                                                                                                                 |
+| A single merchant's traffic spike starving other merchants (noisy neighbor) | **Yes, as of decision 011** — a global per-merchant rate limiter (`MerchantRateLimitGuard`), keyed by API key, configurable per category (general/cod-risk/payments), returns real `429`s with `Retry-After`. Proven by test that one merchant's throttling never affects another's. |
+| Outbox publisher falling behind under load, silently delaying order events  | **Partially** — the publisher retries every tick and never drops events, but there's no alerting on publish lag; an operator would only notice via the (currently nonexistent) dashboards this stage's OpenTelemetry wiring is a first step toward.                                  |
 
 ## Elevation of privilege
 
@@ -62,12 +62,15 @@ a pointer to where) or is a real, open gap.
 
 ## Summary of open gaps (not yet mitigated)
 
-1. No audit log of _who_ changed the COD risk config or invited a dashboard user — only
-   the resulting state is persisted.
-2. No per-merchant rate limiting — a noisy-neighbor risk once multiple merchants share
-   this infrastructure for real.
-3. No active alerting on outbox publish lag.
+As of decision 011, the three gaps originally listed here (no admin-action audit log,
+no per-merchant rate limiting) are closed — see the updated Tampering/Repudiation/Denial
+of service rows above. Remaining open gaps:
 
-None of these block the local/dev usage this project has been built and tested against;
-all three are explicitly called out here so they aren't forgotten before any real
-multi-tenant production deployment.
+1. No active alerting on outbox publish lag, or on anything else (named explicitly as
+   the biggest gap in `docs/incident-response-runbook.md`'s Detection section too).
+2. OpenTelemetry spans could capture PII if a future endpoint ever put PII in a URL
+   param (none do today) — a standing constraint to maintain, not a one-time fix.
+
+Neither blocks the local/dev usage this project has been built and tested against; both
+are explicitly called out here so they aren't forgotten before any real multi-tenant
+production deployment.

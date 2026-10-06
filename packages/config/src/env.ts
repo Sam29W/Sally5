@@ -73,6 +73,15 @@ const envSchema = z.object({
   SHOPIFY_WEBHOOK_SECRET: z.string().min(16).default("dev-only-shopify-webhook-secret-key"),
   SHOPIFY_SCOPES: z.string().default("read_orders,write_draft_orders"),
   SHOPIFY_APP_URL: z.string().default("http://localhost:3000"),
+  // Per-merchant API rate limiting — on top of (not instead of) the existing per-IP and
+  // per-phone limits on the shopper-facing OTP flow. Keyed by the presented API key, not
+  // merchantId, so it needs no DB lookup of its own (see rate-limit/README in-code
+  // comments). Generous defaults: real production traffic from one legitimate merchant
+  // should never hit these; a runaway script or compromised key should.
+  RATE_LIMIT_WINDOW_SECONDS: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_GENERAL_PER_WINDOW: z.coerce.number().int().positive().default(300),
+  RATE_LIMIT_COD_RISK_PER_WINDOW: z.coerce.number().int().positive().default(60),
+  RATE_LIMIT_PAYMENTS_PER_WINDOW: z.coerce.number().int().positive().default(120),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;

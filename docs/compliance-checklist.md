@@ -62,11 +62,16 @@ or is flagged as an open gap.
 
 ## Breach notification readiness
 
-- [ ] **No incident-response runbook exists yet** — DPDP requires notifying the Data
-      Protection Board and affected individuals "as soon as possible" after a breach; there
-      is currently no documented process for _detecting_ one (no alerting is wired up —
-      see the threat model's open gaps) let alone responding to it. **Real gap**, flagged
-      for whoever operates this in production.
+- [x] **Incident-response runbook written**, as of decision 011
+      ([incident-response-runbook.md](incident-response-runbook.md)) — detection,
+      containment, investigation, evidence preservation, notification/escalation,
+      recovery, and post-incident review, with every DPDP-specific legal claim
+      (notification deadline, required content, whether an event legally qualifies as a
+      breach) explicitly deferred to counsel rather than asserted by this document.
+- [ ] **Not yet drilled** — the runbook itself says so: no tabletop exercise has been run
+      against it, and Section 1 (Detection) names the still-missing piece plainly — there
+      is no automated alerting, so detection today depends on someone noticing manually.
+      **Real gap**, flagged for whoever operates this in production.
 
 ## Data localization
 
@@ -80,8 +85,8 @@ or is flagged as an open gap.
 
 ## Summary
 
-Of the above, the two real open gaps worth prioritizing before any real deployment are:
-**encryption in transit for internal service-to-service traffic**, and **an actual
-incident-response/breach-notification runbook**. Everything else that DPDP meaningfully
-touches for a phone-number-only, no-card-data system is already implemented and, where
-practical, directly tested.
+As of decision 011, the incident-response runbook is written (though not yet drilled —
+see above). The remaining real gap worth prioritizing before any real deployment is
+**encryption in transit for internal service-to-service traffic**. Everything else that
+DPDP meaningfully touches for a phone-number-only, no-card-data system is already
+implemented and, where practical, directly tested.

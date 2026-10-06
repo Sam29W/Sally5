@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Inject, Param, Post, Put, Req, UseGuards } from "@nestjs/common";
 import type { Request } from "express";
 import { ApiKeyGuard, type MerchantAuthenticatedRequest } from "../merchant/api-key.guard.js";
+import { RateLimitCategoryTag } from "../rate-limit/rate-limit-category.decorator.js";
 import { CodRiskService } from "./cod-risk.service.js";
 import { CodRiskConfigService } from "./cod-risk-config.service.js";
 import { ScoreOrderDto } from "./dto/score-order.dto.js";
@@ -16,6 +17,7 @@ export class CodRiskController {
   ) {}
 
   @Post("orders/:id/cod-risk/score")
+  @RateLimitCategoryTag("cod-risk")
   score(@Param("id") orderId: string, @Body() dto: ScoreOrderDto, @Req() req: Request) {
     const { merchantId } = req as MerchantAuthenticatedRequest;
     return this.codRiskService.scoreOrder(merchantId, orderId, dto.addressId);
