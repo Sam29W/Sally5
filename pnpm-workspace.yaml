@@ -9,6 +9,7 @@ allowBuilds:
   "@swc/core": true
   esbuild: true
   prisma: true
+  protobufjs: true
 
 minimumReleaseAgeExclude:
   - "@sveltejs/kit@3.0.1"
@@ -20,3 +21,4 @@ onlyBuiltDependencies:
   - "@swc/core"
   - "esbuild"
   - "prisma"
+  - "protobufjs"
