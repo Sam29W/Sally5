@@ -63,6 +63,7 @@ describe("Shopify integration (e2e)", () => {
     const server = app.getHttpServer();
     const merchant = await request(server)
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Shopify Test Merchant ${randomUUID()}` });
 
     // Simulate a prior install by going straight through the Prisma layer the OAuth

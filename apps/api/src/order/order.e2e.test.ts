@@ -19,6 +19,7 @@ describe("Cart and order flow (e2e)", () => {
 
     const merchant = await request(app.getHttpServer())
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Order Test Merchant ${Date.now()}` });
     apiKey = merchant.body.apiKey;
   });
@@ -58,6 +59,7 @@ describe("Cart and order flow (e2e)", () => {
       .expect(201);
     const otherMerchant = await request(server)
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Other Cart Merchant ${Date.now()}` });
 
     await request(server)
@@ -114,6 +116,7 @@ describe("Cart and order flow (e2e)", () => {
 
     const otherMerchant = await request(server)
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Other Order Merchant ${Date.now()}` });
     await request(server)
       .get(`/orders/${order.body.id}`)

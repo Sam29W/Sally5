@@ -28,6 +28,7 @@ describe("Payment orchestration (e2e)", () => {
 
     const merchant = await request(app.getHttpServer())
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Payment Test Merchant ${Date.now()}` });
     apiKey = merchant.body.apiKey;
   });
@@ -263,6 +264,7 @@ describe("Payment orchestration (e2e)", () => {
 
     const other = await request(server)
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Other Payment Merchant ${Date.now()}` });
     await request(server)
       .post("/payments")

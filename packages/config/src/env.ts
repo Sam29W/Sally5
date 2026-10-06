@@ -39,6 +39,11 @@ const envSchema = z.object({
   // credential, just needs to be present so signature verification has something to key
   // off of.
   FAKE_GATEWAY_WEBHOOK_SECRET: z.string().min(16).default("dev-only-fake-gateway-secret-key"),
+  // Gates POST /merchants — minting the first API key for a new merchant is the one
+  // operation in this whole API that can't require an API key (it doesn't exist yet), so
+  // it's gated by this shared operator secret instead. Has a dev-only default so local
+  // dev/tests work out of the box; a real deployment must override it.
+  ADMIN_PROVISIONING_KEY: z.string().min(16).default("dev-only-admin-provisioning-key"),
   // Real sandbox credentials — all optional. The Razorpay gateway is only instantiated
   // when all three are present; until then, payment creation/refund/reconciliation against
   // "razorpay" simply isn't available, but nothing at boot requires them (the fake gateway

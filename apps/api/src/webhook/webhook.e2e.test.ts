@@ -19,9 +19,11 @@ describe("Webhook tenant isolation (e2e)", () => {
     const server = app.getHttpServer();
     const merchantA = await request(server)
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Merchant A ${Date.now()}` });
     const merchantB = await request(server)
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Merchant B ${Date.now()}` });
     apiKeyA = merchantA.body.apiKey;
     apiKeyB = merchantB.body.apiKey;
@@ -88,6 +90,7 @@ describe("Webhook tenant isolation (e2e)", () => {
     const server = app.getHttpServer();
     const merchant = await request(server)
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Merchant Rotate ${Date.now()}` });
     const originalKey = merchant.body.apiKey;
 

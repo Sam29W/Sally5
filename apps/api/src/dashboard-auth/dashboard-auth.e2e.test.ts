@@ -14,6 +14,7 @@ describe("Dashboard auth (e2e)", () => {
   async function freshMerchantApiKey(): Promise<string> {
     const merchant = await request(app.getHttpServer())
       .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
       .send({ name: `Dashboard Auth Merchant ${randomUUID()}` });
     return merchant.body.apiKey;
   }

@@ -773,3 +773,74 @@ API calls are not. Full detail: decision 008.
 ### Decisions
 
 - [`docs/decisions/009-stage8-dashboard.md`](docs/decisions/009-stage8-dashboard.md)
+
+## Stage 9: Hardening and deployment — SHIPPED, mixed real/placeholder (2026-10-06)
+
+Same pattern as Stage 7: everything that can be made real without AWS credentials or a
+`terraform`/`k6` CLI installed in this environment is real and verified; the AWS
+deployment itself is a reviewed-but-unapplied design. Full detail in decision 010.
+
+### What was built
+
+- **OpenTelemetry tracing** (`apps/api/src/tracing.ts`, imported first in `main.ts` so
+  auto-instrumentation can patch `http`/`express`/`pg`/`ioredis`/`kafkajs` before they
+  load): real auto-instrumentation, console-exported (no OTLP collector exists here).
+- **Closed the `POST /merchants` gate** open since Stage 2 (decision 003):
+  `AdminProvisioningGuard` now requires `ADMIN_PROVISIONING_KEY`
+  (`timingSafeEqual`-compared, dev-only default). Updated all 13 existing test call
+  sites across 8 files; added a dedicated guard test.
+- **Closed the `public-checkout` coverage gap** flagged since Stage 6: 7 new
+  `supertest` integration tests (claim idempotency/conflict, cart/order 404s, payment
+  creation, full COD-risk score→confirm flow) — coverage went from ~37% to 100%
+  lines / 95% branches.
+- **Load testing**: `load-test/cod-risk-score.k6.js` (real k6 script, never run — no
+  `k6` binary here) plus `load-test/run-local.mjs` (a hand-rolled concurrent-fetch
+  harness, no new dependency) that _was_ run against the live local API.
+- **STRIDE threat model** ([docs/threat-model.md](docs/threat-model.md)) and **DPDP
+  compliance checklist** ([docs/compliance-checklist.md](docs/compliance-checklist.md)).
+- **Terraform skeleton for AWS** (`infra/terraform/`): VPC, RDS Postgres, ElastiCache
+  Redis, MSK, ECS Fargate + ALB, Secrets Manager — written, never `validate`d (no
+  `terraform` CLI here).
+
+### What was verified
+
+- Full workspace `build`, `typecheck`, `lint`, `format` all clean.
+- `apps/api` test suite: **235/235** passing (10 new: 3 admin-provisioning-guard e2e, 7
+  public-checkout integration).
+- `pnpm audit`: unchanged — 23 findings, all pre-existing NestJS-transitive (no new
+  findings from the OpenTelemetry dependencies added this stage). `gitleaks`: no new
+  findings.
+- **Live-verified OpenTelemetry**: started the real server and confirmed actual spans
+  in the console — DB/Redis/Kafka connection setup, NestJS app creation, and a real
+  `GET /health` request with its nested Express middleware span, correct
+  parent/child trace relationships throughout.
+- **Real local load test results** (concurrency 20, ~519 requests each, against the
+  live local API): `GET /health` p50 8.06ms / p95 16.42ms / p99 22.50ms;
+  `POST /orders/:id/cod-risk/score` p50 16.03ms / p95 23.04ms / p99 47.80ms — both
+  comfortably under decision 006's 200ms budget for the full HTTP path (not just the
+  pure scoring function), closing that Stage 5 action item.
+- **Real backup/restore drill**: `pg_dump` against the live local Postgres (1553
+  merchant rows, 994 orders — real accumulated data from every prior stage's testing),
+  restored into a fresh scratch database, verified row counts match exactly with zero
+  restore errors, scratch database dropped afterward.
+
+### Test results
+
+- `apps/api`: 235/235 unit + e2e passing, including the new admin-provisioning-guard
+  tests (401 with no key, 401 with the wrong key, 201 with the correct key) and the new
+  public-checkout integration suite.
+
+### Known gaps / follow-ups
+
+- **Terraform has never been run through `terraform validate`** — no `terraform` CLI in
+  this environment, no AWS account to apply against. Treat as a reviewed design, not a
+  tested one; see decision 010's follow-up checklist before ever applying it.
+- Threat model's three open gaps: no admin-action audit log, no per-merchant rate
+  limiting, no outbox-publish-lag alerting.
+- Compliance checklist's two open gaps: no encryption in transit between internal
+  services, no incident-response/breach-notification runbook.
+- `CHECKOUT_BASE_URL` is still a placeholder — nothing has been deployed anywhere real.
+
+### Decisions
+
+- [`docs/decisions/010-stage9-hardening.md`](docs/decisions/010-stage9-hardening.md)
