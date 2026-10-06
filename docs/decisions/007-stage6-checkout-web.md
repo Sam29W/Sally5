@@ -38,7 +38,7 @@ COD) against the Stage 1-5 API.
 - **Two real bugs found only by driving the live flow, not by typecheck/lint/unit tests**:
   - `PublicCheckoutModule` used `AccessTokenGuard` without importing
     `AccessTokenGuardModule` (the module providing its `TokenService` dependency). Nest's
-    DI failure during bootstrap hung the *entire* app indefinitely — not just the new
+    DI failure during bootstrap hung the _entire_ app indefinitely — not just the new
     endpoint — silently failing 8 e2e test files (`app` stayed `undefined`, so every
     `afterAll(() => app.close())` threw). This is why "typecheck and unit tests pass" is
     not sufficient evidence a stage works; `pnpm test` plus a live walkthrough both caught
@@ -57,7 +57,7 @@ COD) against the Stage 1-5 API.
   logger redacts anything OTP-shaped (`packages/config/src/logger.ts`'s `redactPII`), by
   design, so logs can never leak a live code. Playwright tests (`e2e/helpers.ts`) seed a
   known code directly into Redis using the same HMAC-phone-hash + SHA-256-code-hash scheme
-  as `OtpService`, *after* waiting for the real `/auth/otp/request` call to land — seeding
+  as `OtpService`, _after_ waiting for the real `/auth/otp/request` call to land — seeding
   before that landed was a real race in an earlier draft (the real request's random code
   would overwrite the seeded one a moment later, failing verification non-deterministically).
 

@@ -18,7 +18,7 @@ const EXPENSIVE_ITEM = {
 
 async function setupOrder(
   merchantName: string,
-  items: typeof CHEAP_ITEM[],
+  items: (typeof CHEAP_ITEM)[],
 ): Promise<{ apiKey: string; cartId: string; orderId: string }> {
   const merchant = await createMerchant(merchantName);
   const cart = await createCart(merchant.apiKey, items);

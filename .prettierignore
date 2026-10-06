@@ -1,2 +1,4 @@
 claude-code-build-prompt.md
 pnpm-lock.yaml
+apps/checkout-web/.svelte-kit
+apps/checkout-web/build

@@ -72,7 +72,8 @@
       showAddAddress = list.length === 0;
       step = "address";
     } catch (err) {
-      error = err instanceof ApiError ? "Incorrect code. Please try again." : "Something went wrong.";
+      error =
+        err instanceof ApiError ? "Incorrect code. Please try again." : "Something went wrong.";
       otp = "";
     } finally {
       loading = false;
@@ -207,7 +208,8 @@
         {#each addresses as addr (addr.id)}
           <label class="address-option">
             <input type="radio" name="address" value={addr.id} bind:group={selectedAddressId} />
-            {addr.line1}, {addr.city}, {addr.state} {addr.pincode}
+            {addr.line1}, {addr.city}, {addr.state}
+            {addr.pincode}
           </label>
         {/each}
       </fieldset>
@@ -253,8 +255,8 @@
         </p>
       {:else if codRisk.action === "nudge_to_prepaid"}
         <p class="risk-banner risk-nudge">
-          Prepaid orders ship faster and are more reliable for this address. We recommend
-          paying online instead.
+          Prepaid orders ship faster and are more reliable for this address. We recommend paying
+          online instead.
         </p>
         <button type="button" onclick={confirmCod} disabled={loading}>
           Continue with COD anyway

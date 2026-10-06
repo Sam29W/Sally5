@@ -608,7 +608,7 @@ Tracked here so they don't get lost between stages:
 - **Found and fixed two real bugs that only live-testing surfaced** (full detail in
   decision 007):
   1. `PublicCheckoutModule` was missing the module providing `AccessTokenGuard`'s
-     `TokenService` dependency. Nest's DI failure hung the *entire* app's bootstrap
+     `TokenService` dependency. Nest's DI failure hung the _entire_ app's bootstrap
      indefinitely — not just the new endpoint — which was silently failing 8 existing e2e
      test files (`app` stayed `undefined`). `pnpm test` alone didn't surface this clearly
      until investigated; a live server-start attempt is what first showed it hanging.
