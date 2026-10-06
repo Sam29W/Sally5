@@ -560,5 +560,84 @@ Tracked here so they don't get lost between stages:
   new contention bottleneck was introduced by the atomic claim pattern).
 - **Stage 9 (hardening)**: benchmark the full `POST /orders/:id/cod-risk/score` HTTP path
   under load, not just the pure scoring function (decision 006).
-- **Stage 6 or later**: when the checkout web app exists, replace `CHECKOUT_BASE_URL`'s
-  placeholder with the real deployed checkout URL for Razorpay's `checkoutUrl` construction.
+- ~~**Stage 6 or later**: when the checkout web app exists, replace `CHECKOUT_BASE_URL`'s
+  placeholder with the real deployed checkout URL for Razorpay's `checkoutUrl`
+  construction.~~ Still a placeholder — `apps/checkout-web` exists now but isn't deployed
+  anywhere yet, so there's no real URL to put there. Revisit at actual deployment time
+  (Stage 9 or whenever this ships to a real host).
+- **Stage 9 (hardening)**: `apps/api/src/public-checkout` has low vitest coverage (~37%
+  lines) — it's exercised by `apps/checkout-web`'s Playwright E2E suite instead of
+  `supertest`-style integration tests. Worth adding direct API-level integration tests for
+  this module so its coverage shows up without requiring a browser.
+
+## Stage 6: Checkout web app — SHIPPED (2026-10-06)
+
+### What was built
+
+- `apps/checkout-web`: a SvelteKit SPA (Svelte 5 runes, `adapter-static` with
+  `fallback: "index.html"`, `ssr`/`prerender` disabled) — a single embeddable checkout
+  page driving phone → OTP → address → payment (prepaid or COD).
+- `apps/api/src/public-checkout`: a new capability-scoped surface the browser can call
+  without ever holding a merchant's secret API key —
+  `GET /public/carts/:id`, `GET /public/orders/:id`,
+  `POST /public/orders/:id/{claim,payments,cod-risk-score,confirm-cod}`. `claim` links an
+  OTP-verified shopper to an order the merchant created anonymously (phone-first
+  checkout); the rest are keyed by the order/cart UUID itself.
+- `OrderService.claimForShopper`: idempotent for the same shopper, rejects a second
+  shopper claiming an already-claimed order.
+- CORS enabled on the API (`origin: true, credentials: false`) — the widget is designed
+  to embed on arbitrary, unknown merchant storefronts; nothing under `/public/*` exposes
+  another shopper's or merchant's data.
+- Playwright E2E suite (`apps/checkout-web/e2e/`) covering the four required scenarios:
+  new shopper paying prepaid, returning shopper reusing a saved address, a high-risk
+  order getting nudged to prepaid, and an OTP failure-then-retry path. Seeds OTP codes
+  directly into Redis (same HMAC-phone-hash/SHA-256-code-hash scheme as `OtpService`) so
+  tests never depend on reading a real SMS.
+
+### What was verified
+
+- Full workspace `build`, `typecheck`, `lint` all clean.
+- `apps/api` test suite: **189/189** passing.
+- `pnpm audit`: no new findings beyond the pre-existing documented NestJS-transitive set
+  (Stage 0's).
+- `gitleaks`: no findings in tracked files (`.env` itself is gitignored, as always).
+- Bundle size: ~38 KB gzipped for the full client bundle — well under the 100 KB budget.
+- Live walkthrough against the real API (not just tests): created a merchant/cart/order,
+  drove phone → OTP → claim → address → COD risk score → confirm via `curl`, then the
+  same flow end-to-end through the actual built SvelteKit app in a browser.
+- **Found and fixed two real bugs that only live-testing surfaced** (full detail in
+  decision 007):
+  1. `PublicCheckoutModule` was missing the module providing `AccessTokenGuard`'s
+     `TokenService` dependency. Nest's DI failure hung the *entire* app's bootstrap
+     indefinitely — not just the new endpoint — which was silently failing 8 existing e2e
+     test files (`app` stayed `undefined`). `pnpm test` alone didn't surface this clearly
+     until investigated; a live server-start attempt is what first showed it hanging.
+  2. `<input pattern="[0-9]{6}">` on the OTP and pincode fields: Svelte's template syntax
+     silently reinterpreted the bare-string `{6}` as an interpolation, rendering the real
+     DOM attribute as `pattern="[0-9]6"` — which rejects any 6-digit input and blocked
+     every submission via native HTML5 validation, with no visible error. Caught while
+     debugging an apparently "hung" Playwright test. Fixed with `pattern={"[0-9]{6}"}`.
+
+### Test results
+
+- Playwright: **4/4** scenarios passing, stable across repeated runs (no flakiness
+  observed over 3 consecutive full-suite runs).
+- `apps/api`: 189/189 unit + e2e tests passing (unchanged count from Stage 5 — this
+  stage's new backend code is covered by the Playwright suite, not new vitest specs; see
+  the coverage gap noted above).
+
+### Known gaps / follow-ups
+
+- No embeddable loader/SDK script (a single `<script>`-tag modal/redirect wrapper per the
+  original scope) — the built SvelteKit output works directly as an iframe `src`, but the
+  "drop one script tag on your storefront" experience isn't built yet.
+- No Lighthouse run — no headless-Chrome performance tooling available in this
+  environment; bundle size was verified directly from the `vite build` output instead.
+- `public-checkout` module has low vitest/supertest coverage (tracked above) — covered by
+  Playwright instead.
+- `CHECKOUT_BASE_URL` (Stage 4's Razorpay `checkoutUrl` construction) is still a
+  placeholder — no real deployment exists yet to point it at.
+
+### Decisions
+
+- [`docs/decisions/007-stage6-checkout-web.md`](docs/decisions/007-stage6-checkout-web.md)

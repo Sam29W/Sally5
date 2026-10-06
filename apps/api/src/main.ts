@@ -19,6 +19,12 @@ async function bootstrap(): Promise<void> {
   applyTrustProxy(app, config.TRUST_PROXY_HOPS);
   applyBodyParsers(app);
   app.use(requestIdMiddleware);
+  // The checkout widget is designed to be embedded on arbitrary merchant storefronts
+  // (unknown origins at build time), so this intentionally allows any origin — it's the
+  // same trust model a hosted-checkout redirect has. Nothing behind "*/public/*" exposes
+  // another shopper's or merchant's data (see PublicCheckoutService), and merchant-secret
+  // endpoints are never called from a browser context in the first place.
+  app.enableCors({ origin: true, credentials: false });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
 
   await app.listen(config.PORT);
