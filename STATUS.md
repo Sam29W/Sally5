@@ -844,3 +844,55 @@ deployment itself is a reviewed-but-unapplied design. Full detail in decision 01
 ### Decisions
 
 - [`docs/decisions/010-stage9-hardening.md`](docs/decisions/010-stage9-hardening.md)
+
+## Production hardening follow-up: audit log, per-merchant rate limiting, incident runbook — SHIPPED (2026-10-07)
+
+Closes the three gaps Stage 9 flagged that don't need external credentials/tooling to
+close for real. Full detail in decision 011.
+
+### What was built
+
+- **Audit log**: new `AuditLog` model (append-only — `AuditLogService` exposes
+  `record`/`listForMerchant` only, no update/delete path anywhere). Records actor
+  (`MerchantUser` id/email, or the API key prefix for the one pre-`MerchantUser` action),
+  merchant, action, timestamp, resource, old/new values (JSON), IP, and user-agent.
+  Wired into owner bootstrap, dashboard-user invitations, COD-risk-config updates
+  (old and new config captured), and API-key rotation (prefix only, never the secret).
+  Queryable via `GET /dashboard/audit-logs` (optional `action` filter), open to any
+  authenticated dashboard role.
+- **Per-merchant rate limiting**: a new global guard (`MerchantRateLimitGuard`), keyed
+  by a hash of the presented API key (no DB lookup needed), configurable per category
+  (`general` 300/window, `cod-risk` 60/window, `payments` 120/window, shared configurable
+  window). Returns a real `429` with `Retry-After`/`X-RateLimit-*` headers. Applies on
+  top of, not instead of, the existing per-IP/per-phone OTP limits.
+- **Incident-response runbook** ([docs/incident-response-runbook.md](docs/incident-response-runbook.md)):
+  detection, containment, investigation, evidence preservation, notification/escalation
+  (with a DPDP-specific section), recovery, and post-incident review. Every legal claim
+  marked **⚠ REQUIRES LEGAL COUNSEL** rather than asserted.
+- Threat model and compliance checklist updated to reflect all three gaps closed (one
+  remaining named gap each: no alerting/no tabletop exercise, and encryption in transit
+  between internal services, respectively).
+
+### What was verified
+
+- Full workspace `build`, `typecheck`, `lint`, `format` all clean.
+- `apps/api` test suite: **244/244** passing (9 new: 5 audit-log e2e, 4 rate-limit e2e).
+- `pnpm audit` / `gitleaks`: no new findings.
+- Rate-limit test proves the real 429 path (via a `CONFIG`-overridden tiny limit, not a
+  mock) and proves one merchant's throttling never affects another's.
+- Audit-log tests prove cross-merchant isolation (never another merchant's entries),
+  correct actor attribution (inviter for invites, API-key prefix for bootstrap), and
+  that a rotated API key's secret never appears in a recorded value.
+
+### Known gaps / follow-ups
+
+- No alerting/monitoring still exists — named explicitly in the runbook's Detection
+  section as the biggest real gap in actually operating it.
+- No tabletop exercise has been run against the runbook.
+- Encryption in transit between internal services (API ↔ Postgres/Redis/Kafka) — still
+  open, unchanged from Stage 9.
+- `CHECKOUT_BASE_URL` and the Terraform skeleton are unaffected by this follow-up.
+
+### Decisions
+
+- [`docs/decisions/011-production-gaps-closed.md`](docs/decisions/011-production-gaps-closed.md)

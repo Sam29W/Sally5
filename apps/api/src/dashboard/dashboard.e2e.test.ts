@@ -192,4 +192,107 @@ describe("Dashboard (e2e)", () => {
     expect(metrics.body.length).toBe(1);
     expect(metrics.body[0].ordersCreated).toBe(1);
   });
+
+  it("records an audit log entry for bootstrapping the owner account", async () => {
+    const { ownerToken } = await bootstrapMerchantWithOwner(app.getHttpServer());
+    const logs = await request(app.getHttpServer())
+      .get("/dashboard/audit-logs")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(logs.body.length).toBe(1);
+    expect(logs.body[0]).toMatchObject({
+      action: "merchant_user.bootstrap_owner",
+      resourceType: "merchant_user",
+    });
+    expect(logs.body[0].actorApiKeyPrefix).toBeTruthy();
+    expect(logs.body[0].ipAddress).toBeTruthy();
+  });
+
+  it("records an audit log entry when an owner invites a colleague, attributing the inviter", async () => {
+    const server = app.getHttpServer();
+    const { ownerToken } = await bootstrapMerchantWithOwner(server);
+
+    const opsEmail = `ops-${randomUUID()}@example.com`;
+    await request(server)
+      .post("/dashboard-auth/users")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ email: opsEmail, password: "an-ops-password-here", role: "ops" })
+      .expect(201);
+
+    const logs = await request(server)
+      .get("/dashboard/audit-logs?action=merchant_user.invite")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(logs.body.length).toBe(1);
+    expect(logs.body[0]).toMatchObject({
+      action: "merchant_user.invite",
+      resourceType: "merchant_user",
+      newValue: { email: opsEmail, role: "ops" },
+    });
+    expect(logs.body[0].actorId).toBeTruthy();
+  });
+
+  it("records old and new values when the COD risk config changes", async () => {
+    const server = app.getHttpServer();
+    const { ownerToken } = await bootstrapMerchantWithOwner(server);
+
+    await request(server)
+      .put("/dashboard/cod-risk-config")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .send({ highValueThresholdCents: 777000 })
+      .expect(200);
+
+    const logs = await request(server)
+      .get("/dashboard/audit-logs?action=cod_risk_config.update")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(logs.body.length).toBe(1);
+    expect(logs.body[0].oldValue.highValueThresholdCents).not.toBe(777000);
+    expect(logs.body[0].newValue.highValueThresholdCents).toBe(777000);
+  });
+
+  it("records an audit log entry when an API key is rotated, never the secret itself", async () => {
+    const server = app.getHttpServer();
+    const { ownerToken } = await bootstrapMerchantWithOwner(server);
+
+    const rotated = await request(server)
+      .post("/dashboard/api-keys/rotate")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .expect(201);
+
+    const logs = await request(server)
+      .get("/dashboard/audit-logs?action=api_key.rotate")
+      .set("Authorization", `Bearer ${ownerToken}`)
+      .expect(200);
+    expect(logs.body.length).toBe(1);
+    expect(logs.body[0].newValue.prefix).toBe(rotated.body.apiKey.split(".")[0]);
+    expect(JSON.stringify(logs.body[0])).not.toContain(rotated.body.apiKey.split(".")[1]);
+  });
+
+  it("never returns another merchant's audit log entries", async () => {
+    const server = app.getHttpServer();
+    const merchantA = await bootstrapMerchantWithOwner(server);
+    const merchantB = await bootstrapMerchantWithOwner(server);
+
+    // Generate a second, distinctive entry for merchant A that must never leak into B's view.
+    await request(server)
+      .post("/dashboard-auth/users")
+      .set("Authorization", `Bearer ${merchantA.ownerToken}`)
+      .send({
+        email: `ro-${randomUUID()}@example.com`,
+        password: "a-readonly-password-xyz",
+        role: "readonly",
+      })
+      .expect(201);
+
+    const logsForB = await request(server)
+      .get("/dashboard/audit-logs")
+      .set("Authorization", `Bearer ${merchantB.ownerToken}`)
+      .expect(200);
+    // Only merchant B's own bootstrap entry — never merchant A's bootstrap or invite.
+    expect(logsForB.body.length).toBe(1);
+    expect(
+      logsForB.body.every((l: { merchantId: string }) => l.merchantId === merchantB.merchantId),
+    ).toBe(true);
+  });
 });

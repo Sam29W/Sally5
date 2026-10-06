@@ -17,6 +17,7 @@ import { PublicCheckoutModule } from "./public-checkout/public-checkout.module.j
 import { ShopifyModule } from "./shopify/shopify.module.js";
 import { DashboardAuthModule } from "./dashboard-auth/dashboard-auth.module.js";
 import { DashboardModule } from "./dashboard/dashboard.module.js";
+import { MerchantRateLimitModule } from "./rate-limit/merchant-rate-limit.module.js";
 
 @Module({
   imports: [
@@ -37,6 +38,7 @@ import { DashboardModule } from "./dashboard/dashboard.module.js";
     ShopifyModule,
     DashboardAuthModule,
     DashboardModule,
+    MerchantRateLimitModule,
   ],
   controllers: [HealthController],
 })
