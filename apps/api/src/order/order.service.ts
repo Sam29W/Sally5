@@ -80,6 +80,24 @@ export class OrderService {
     return order;
   }
 
+  /** Links an authenticated shopper to an order created before they identified themselves
+   * (phone-first checkout: the merchant creates the cart/order anonymously, and the shopper
+   * verifies OTP mid-flow). Idempotent — reclaiming by the same shopper is a no-op; a claim
+   * by a different shopper is rejected rather than silently reassigning the order. */
+  async claimForShopper(orderId: string, shopperId: string): Promise<Order> {
+    const order = await this.prisma.order.findUnique({ where: { id: orderId } });
+    if (!order) {
+      throw new NotFoundException("Order not found");
+    }
+    if (order.shopperId === shopperId) {
+      return order;
+    }
+    if (order.shopperId) {
+      throw new ConflictException("Order already claimed by a different shopper");
+    }
+    return this.prisma.order.update({ where: { id: orderId }, data: { shopperId } });
+  }
+
   /** Validates the transition, then writes the new status and its outbox event
    * transactionally — same durability guarantee as createIdempotent. */
   async transition(merchantId: string, orderId: string, to: OrderStatus): Promise<Order> {

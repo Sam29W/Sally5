@@ -13,6 +13,7 @@ import { OrderModule } from "./order/order.module.js";
 import { OutboxModule } from "./outbox/outbox.module.js";
 import { PaymentModule } from "./payment/payment.module.js";
 import { CodRiskModule } from "./cod-risk/cod-risk.module.js";
+import { PublicCheckoutModule } from "./public-checkout/public-checkout.module.js";
 
 @Module({
   imports: [
@@ -29,6 +30,7 @@ import { CodRiskModule } from "./cod-risk/cod-risk.module.js";
     OutboxModule,
     PaymentModule,
     CodRiskModule,
+    PublicCheckoutModule,
   ],
   controllers: [HealthController],
 })

@@ -10,6 +10,9 @@ allowBuilds:
   esbuild: true
   prisma: true
 
+minimumReleaseAgeExclude:
+  - "@sveltejs/kit@3.0.1"
+
 onlyBuiltDependencies:
   - "@nestjs/core"
   - "@prisma/client"
