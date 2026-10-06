@@ -39,7 +39,10 @@ describe("COD risk engine (e2e)", () => {
   });
 
   async function createMerchant(name: string): Promise<{ merchantId: string; apiKey: string }> {
-    const res = await request(app.getHttpServer()).post("/merchants").send({ name });
+    const res = await request(app.getHttpServer())
+      .post("/merchants")
+      .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
+      .send({ name });
     return res.body;
   }
 

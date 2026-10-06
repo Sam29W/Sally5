@@ -11,6 +11,7 @@ import { requestIdMiddleware } from "../request-id.middleware.js";
 async function bootstrapMerchantWithOwner(server: App) {
   const merchant = await request(server)
     .post("/merchants")
+    .set("x-admin-provisioning-key", "dev-only-admin-provisioning-key")
     .send({ name: `Dashboard Merchant ${randomUUID()}` });
   const apiKey = merchant.body.apiKey as string;
   const email = `owner-${randomUUID()}@example.com`;
