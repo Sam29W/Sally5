@@ -8,16 +8,16 @@ datasource db {
 }
 
 model Shopper {
-  id             String          @id @default(uuid())
+  id              String          @id @default(uuid())
   // AES-256-GCM ciphertext (iv:tag:ciphertext, base64), never the raw number.
-  phoneEncrypted String          @map("phone_encrypted")
+  phoneEncrypted  String          @map("phone_encrypted")
   // HMAC-SHA256(phone) with a server-side key — deterministic, used only for lookup.
-  phoneHash      String          @unique @map("phone_hash")
-  createdAt      DateTime        @default(now()) @map("created_at")
-  updatedAt      DateTime        @updatedAt @map("updated_at")
-  consents       ConsentRecord[]
+  phoneHash       String          @unique @map("phone_hash")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  consents        ConsentRecord[]
   sessionFamilies SessionFamily[]
-  addresses      Address[]
+  addresses       Address[]
 
   @@map("shoppers")
 }
@@ -32,6 +32,7 @@ model Merchant {
   cartSessions     CartSession[]
   orders           Order[]
   codRiskConfig    CodRiskConfig?
+  shopifyShop      ShopifyShop?
 
   @@map("merchants")
 }
@@ -49,22 +50,22 @@ model ApiKey {
   revokedAt  DateTime? @map("revoked_at")
   createdAt  DateTime  @default(now()) @map("created_at")
 
-  @@map("api_keys")
   @@index([merchantId])
+  @@map("api_keys")
 }
 
 model WebhookEndpoint {
-  id            String   @id @default(uuid())
-  merchantId    String   @map("merchant_id")
-  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  url           String
+  id                     String   @id @default(uuid())
+  merchantId             String   @map("merchant_id")
+  merchant               Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  url                    String
   // AES-256-GCM ciphertext of the signing secret (same scheme as phone encryption) — needed
   // in recoverable form to sign outgoing webhook payloads, so it's encrypted, not hashed.
-  signingSecretEncrypted String @map("signing_secret_encrypted")
-  createdAt     DateTime @default(now()) @map("created_at")
+  signingSecretEncrypted String   @map("signing_secret_encrypted")
+  createdAt              DateTime @default(now()) @map("created_at")
 
-  @@map("webhook_endpoints")
   @@index([merchantId])
+  @@map("webhook_endpoints")
 }
 
 model Address {
@@ -83,8 +84,8 @@ model Address {
   updatedAt    DateTime       @updatedAt @map("updated_at")
   shares       AddressShare[]
 
-  @@map("addresses")
   @@index([shopperId])
+  @@map("addresses")
 }
 
 // Explicit shopper consent for a merchant other than the one the address was first used
@@ -109,56 +110,56 @@ model ConsentRecord {
   version   String
   grantedAt DateTime @default(now()) @map("granted_at")
 
-  @@map("consent_records")
   @@index([shopperId])
+  @@map("consent_records")
 }
 
 // One family per login; rotating refresh tokens within a family share a lineage.
 // Reuse of an already-rotated token revokes the whole family.
 model SessionFamily {
-  id          String         @id @default(uuid())
-  shopperId   String         @map("shopper_id")
-  shopper     Shopper        @relation(fields: [shopperId], references: [id], onDelete: Cascade)
-  revokedAt   DateTime?      @map("revoked_at")
-  createdAt   DateTime       @default(now()) @map("created_at")
+  id            String         @id @default(uuid())
+  shopperId     String         @map("shopper_id")
+  shopper       Shopper        @relation(fields: [shopperId], references: [id], onDelete: Cascade)
+  revokedAt     DateTime?      @map("revoked_at")
+  createdAt     DateTime       @default(now()) @map("created_at")
   refreshTokens RefreshToken[]
 
-  @@map("session_families")
   @@index([shopperId])
+  @@map("session_families")
 }
 
 model RefreshToken {
-  id           String        @id @default(uuid())
-  familyId     String        @map("family_id")
-  family       SessionFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  id        String        @id @default(uuid())
+  familyId  String        @map("family_id")
+  family    SessionFamily @relation(fields: [familyId], references: [id], onDelete: Cascade)
   // SHA-256 of the token secret — the raw token is never stored.
-  tokenHash    String        @unique @map("token_hash")
-  rotatedAt    DateTime?     @map("rotated_at")
-  expiresAt    DateTime      @map("expires_at")
-  createdAt    DateTime      @default(now()) @map("created_at")
+  tokenHash String        @unique @map("token_hash")
+  rotatedAt DateTime?     @map("rotated_at")
+  expiresAt DateTime      @map("expires_at")
+  createdAt DateTime      @default(now()) @map("created_at")
 
-  @@map("refresh_tokens")
   @@index([familyId])
+  @@map("refresh_tokens")
 }
 
 model CartSession {
-  id             String   @id @default(uuid())
-  merchantId     String   @map("merchant_id")
-  merchant       Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  shopperId      String?  @map("shopper_id")
+  id            String   @id @default(uuid())
+  merchantId    String   @map("merchant_id")
+  merchant      Merchant @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  shopperId     String?  @map("shopper_id")
   // Line items as submitted: [{ sku, name, quantity, unitPriceCents }, ...].
-  items          Json
-  couponCode     String?  @map("coupon_code")
-  subtotalCents  Int      @map("subtotal_cents")
-  discountCents  Int      @map("discount_cents")
-  shippingCents  Int      @map("shipping_cents")
-  taxCents       Int      @map("tax_cents")
-  totalCents     Int      @map("total_cents")
-  createdAt      DateTime @default(now()) @map("created_at")
-  orders         Order[]
+  items         Json
+  couponCode    String?  @map("coupon_code")
+  subtotalCents Int      @map("subtotal_cents")
+  discountCents Int      @map("discount_cents")
+  shippingCents Int      @map("shipping_cents")
+  taxCents      Int      @map("tax_cents")
+  totalCents    Int      @map("total_cents")
+  createdAt     DateTime @default(now()) @map("created_at")
+  orders        Order[]
 
-  @@map("cart_sessions")
   @@index([merchantId])
+  @@map("cart_sessions")
 }
 
 // created -> payment_pending -> paid | cod_confirmed -> fulfilled -> delivered | rto
@@ -177,27 +178,27 @@ enum OrderStatus {
 }
 
 model Order {
-  id             String       @id @default(uuid())
-  merchantId     String       @map("merchant_id")
-  merchant       Merchant     @relation(fields: [merchantId], references: [id], onDelete: Cascade)
-  cartSessionId  String       @map("cart_session_id")
-  cartSession    CartSession  @relation(fields: [cartSessionId], references: [id])
-  shopperId      String?      @map("shopper_id")
-  status         OrderStatus  @default(created)
-  totalCents     Int          @map("total_cents")
+  id               String            @id @default(uuid())
+  merchantId       String            @map("merchant_id")
+  merchant         Merchant          @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  cartSessionId    String            @map("cart_session_id")
+  cartSession      CartSession       @relation(fields: [cartSessionId], references: [id])
+  shopperId        String?           @map("shopper_id")
+  status           OrderStatus       @default(created)
+  totalCents       Int               @map("total_cents")
   // Scoped per-merchant (see @@unique below) — lets a merchant safely retry an order
   // creation call without ever double-creating the order.
-  idempotencyKey String       @map("idempotency_key")
-  createdAt      DateTime     @default(now()) @map("created_at")
-  updatedAt      DateTime     @updatedAt @map("updated_at")
-  outboxEvents   OutboxEvent[]
-  payments       Payment[]
+  idempotencyKey   String            @map("idempotency_key")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+  outboxEvents     OutboxEvent[]
+  payments         Payment[]
   codRiskDecisions CodRiskDecision[]
   codRiskOutcome   CodRiskOutcome?
 
-  @@map("orders")
   @@unique([merchantId, idempotencyKey])
   @@index([merchantId])
+  @@map("orders")
 }
 
 // The outbox pattern: every state-changing write to an Order inserts a row here in the
@@ -207,17 +208,17 @@ model Order {
 // the DB commit and the Kafka publish — can never lose an event: on restart, the
 // publisher simply finds the still-unpublished row and sends it (at-least-once delivery).
 model OutboxEvent {
-  id            String    @id @default(uuid())
-  orderId       String    @map("order_id")
-  order         Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  eventType     String    @map("event_type")
+  id          String    @id @default(uuid())
+  orderId     String    @map("order_id")
+  order       Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  eventType   String    @map("event_type")
   // Event body as it will be published to Kafka.
-  payload       Json
-  createdAt     DateTime  @default(now()) @map("created_at")
-  publishedAt   DateTime? @map("published_at")
+  payload     Json
+  createdAt   DateTime  @default(now()) @map("created_at")
+  publishedAt DateTime? @map("published_at")
 
-  @@map("outbox_events")
   @@index([publishedAt])
+  @@map("outbox_events")
 }
 
 enum PaymentStatus {
@@ -242,9 +243,9 @@ model Payment {
   createdAt        DateTime      @default(now()) @map("created_at")
   updatedAt        DateTime      @updatedAt @map("updated_at")
 
-  @@map("payments")
   @@index([orderId])
   @@index([status])
+  @@map("payments")
 }
 
 // Dedups webhook deliveries per gateway so a duplicate or replayed delivery can never be
@@ -298,9 +299,9 @@ model CodRiskDecision {
   inputs      Json
   createdAt   DateTime @default(now()) @map("created_at")
 
-  @@map("cod_risk_decisions")
   @@index([orderId])
   @@index([merchantId])
+  @@map("cod_risk_decisions")
 }
 
 // Feeds the labeled dataset for a future model — delivered vs RTO per order. The model
@@ -314,4 +315,21 @@ model CodRiskOutcome {
   recordedAt DateTime @default(now()) @map("recorded_at")
 
   @@map("cod_risk_outcomes")
+}
+
+// One row per installed Shopify store, linked 1:1 to the merchant the OAuth install flow
+// provisioned (see shopify/shopify-oauth.service.ts). `accessToken` is AES-256-GCM
+// encrypted at rest, same pattern as WebhookEndpoint.signingSecretEncrypted — the raw
+// Admin API token is never stored or logged in the clear.
+model ShopifyShop {
+  id                   String    @id @default(uuid())
+  shopDomain           String    @unique @map("shop_domain")
+  merchantId           String    @unique @map("merchant_id")
+  merchant             Merchant  @relation(fields: [merchantId], references: [id], onDelete: Cascade)
+  accessTokenEncrypted String    @map("access_token_encrypted")
+  scopes               String
+  installedAt          DateTime  @default(now()) @map("installed_at")
+  uninstalledAt        DateTime? @map("uninstalled_at")
+
+  @@map("shopify_shops")
 }

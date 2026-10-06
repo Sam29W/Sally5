@@ -1,7 +1,7 @@
 import express, { type NextFunction, type Request, type Response } from "express";
 import type { NestExpressApplication } from "@nestjs/platform-express";
 
-const WEBHOOK_PATH_PREFIX = "/payments/webhook";
+const WEBHOOK_PATH_PREFIXES = ["/payments/webhook", "/shopify/webhooks"];
 
 /**
  * Webhook signature verification needs the *exact* bytes the gateway signed — if Nest's
@@ -14,7 +14,7 @@ export function applyBodyParsers(app: NestExpressApplication): void {
   const rawParser = express.raw({ type: "*/*" });
   const jsonParser = express.json();
   app.use((req: Request, res: Response, next: NextFunction) => {
-    if (req.path.startsWith(WEBHOOK_PATH_PREFIX)) {
+    if (WEBHOOK_PATH_PREFIXES.some((prefix) => req.path.startsWith(prefix))) {
       rawParser(req, res, next);
     } else {
       jsonParser(req, res, next);

@@ -14,6 +14,7 @@ import { OutboxModule } from "./outbox/outbox.module.js";
 import { PaymentModule } from "./payment/payment.module.js";
 import { CodRiskModule } from "./cod-risk/cod-risk.module.js";
 import { PublicCheckoutModule } from "./public-checkout/public-checkout.module.js";
+import { ShopifyModule } from "./shopify/shopify.module.js";
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { PublicCheckoutModule } from "./public-checkout/public-checkout.module.j
     PaymentModule,
     CodRiskModule,
     PublicCheckoutModule,
+    ShopifyModule,
   ],
   controllers: [HealthController],
 })

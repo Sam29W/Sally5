@@ -641,3 +641,74 @@ Tracked here so they don't get lost between stages:
 ### Decisions
 
 - [`docs/decisions/007-stage6-checkout-web.md`](docs/decisions/007-stage6-checkout-web.md)
+
+## Stage 7: Shopify integration — SHIPPED, heavily placeholder-scoped (2026-10-06)
+
+No Shopify Partner account or dev store exists in this environment. Everything that
+_can_ be made real without one is real and tested; the live OAuth round trip and Admin
+API calls are not. Full detail: decision 008.
+
+### What was built
+
+- `apps/api/src/shopify`: OAuth install (`GET /shopify/install`) and callback
+  (`GET /shopify/callback`) routes, a single webhook endpoint
+  (`POST /shopify/webhooks`, topic read from `X-Shopify-Topic` — matches how Shopify
+  actually delivers webhooks, one registered URL per topic, not one path per topic).
+- `shopify-hmac.util.ts`: real implementations of both of Shopify's HMAC algorithms
+  (OAuth callback query-param signing, webhook raw-body signing), `timingSafeEqual`
+  throughout.
+- `ShopifyOAuthService`: builds the authorize URL, verifies the callback signature,
+  exchanges a code for a token (real request shape, fake-fetch tested), and
+  provisions/reuses a 1:1 Merchant per `shopDomain` on install — reinstall after an
+  uninstall reuses the same merchant rather than creating a second one.
+- `ShopifyWebhookService`: handles `app/uninstalled` (marks the shop, never deletes it)
+  and the three mandatory GDPR webhooks (`customers/data_request`, `customers/redact`,
+  `shop/redact`) as accept-and-log no-ops — there's no Shopify-sourced customer data
+  anywhere in the system yet to act on.
+- New `ShopifyShop` Prisma model (shop domain, 1:1 merchant link, AES-256-GCM encrypted
+  access token, install/uninstall timestamps) and a new encryption key
+  (`SHOPIFY_TOKEN_ENCRYPTION_KEY`) dedicated to it, same pattern as the phone and
+  webhook-secret encryption keys — a leak of one key never compromises another's
+  purpose.
+- Extended `body-parser.ts`'s raw-body routing (Stage 4's pattern) to cover
+  `/shopify/webhooks` alongside `/payments/webhook`.
+
+### What was verified
+
+- Full workspace `build`, `typecheck`, `lint`, `format` all clean.
+- `apps/api` test suite: **210/210** passing (21 new).
+- `pnpm audit` / `gitleaks`: no new findings.
+- `shopify` module coverage: 85.51% lines — the untested remainder is specifically the
+  OAuth happy-path redirect and token-exchange-to-real-Shopify branches, which need a
+  live Partner app to exercise meaningfully (see known gaps).
+
+### Test results
+
+- **HMAC verification, both algorithms**: accepts correctly-signed input, rejects a
+  tampered payload against a stale signature, rejects the wrong secret, rejects a
+  missing signature header — for both the OAuth callback query-string scheme and the
+  webhook raw-body scheme.
+- **Install/uninstall lifecycle**: first install provisions a new merchant; reinstall
+  after uninstall reuses the same merchant and updates scopes/token rather than creating
+  a duplicate; uninstall sets a timestamp without deleting anything.
+- **Webhook e2e**: a missing signature → 401; a tampered body against a stale
+  signature → 401; a correctly-signed `app/uninstalled` → 200 and the shop's
+  `uninstalledAt` gets set; all three GDPR webhooks → 200 no-op.
+
+### Known gaps / follow-ups
+
+- **No live OAuth round trip** — `exchangeCodeForToken`'s request shape is real and
+  unit-tested with a fake `fetch`, but has never hit an actual Shopify server. Needs a
+  real Partner app + dev store to validate.
+- **No `orders/create` sync or draft-order creation** — the webhook is accepted and
+  signature-verified, but the handler is a log line, not a real cart/order mapping.
+  Deliberately not guessed at without a real payload to build against.
+- **CSRF `state` nonce isn't round-tripped yet** — generated and cookie-set on install,
+  but the callback doesn't re-check it against the cookie (nothing to prove that check
+  against without a live flow).
+- All three gaps above are the natural next steps once real Shopify credentials exist;
+  see decision 008's follow-up list for the order to tackle them in.
+
+### Decisions
+
+- [`docs/decisions/008-stage7-shopify.md`](docs/decisions/008-stage7-shopify.md)

@@ -46,6 +46,24 @@ const envSchema = z.object({
   // How often the reconciliation job polls payments stuck in `pending`.
   RECONCILIATION_INTERVAL_MS: z.coerce.number().int().positive().default(60000),
   RECONCILIATION_STALE_AFTER_MS: z.coerce.number().int().positive().default(300000),
+  // Real Shopify Partner app credentials — all optional, same pattern as the Razorpay
+  // keys above. No Partner account/dev store exists in this environment, so the OAuth
+  // install/callback flow and live Admin API calls are unexercised; the HMAC
+  // verification logic they depend on is unit-tested against known-good vectors instead.
+  // 32-byte key, hex-encoded, for AES-256-GCM encryption of the Shopify access token at
+  // rest — required even without real Shopify credentials, since it protects whatever
+  // token value ends up stored.
+  SHOPIFY_TOKEN_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/i, "must be 64 hex chars (32 bytes)"),
+  SHOPIFY_API_KEY: z.string().optional(),
+  SHOPIFY_API_SECRET: z.string().optional(),
+  // Unlike API_KEY/SECRET above, this one isn't a Shopify-issued credential — it's a
+  // shared secret *we* mint and paste into the Partner dashboard's webhook config, so it
+  // can have a real dev-only default and be exercised by tests even without a live app.
+  SHOPIFY_WEBHOOK_SECRET: z.string().min(16).default("dev-only-shopify-webhook-secret-key"),
+  SHOPIFY_SCOPES: z.string().default("read_orders,write_draft_orders"),
+  SHOPIFY_APP_URL: z.string().default("http://localhost:3000"),
 });
 
 export type AppConfig = z.infer<typeof envSchema>;
