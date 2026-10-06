@@ -712,3 +712,64 @@ API calls are not. Full detail: decision 008.
 ### Decisions
 
 - [`docs/decisions/008-stage7-shopify.md`](docs/decisions/008-stage7-shopify.md)
+
+## Stage 8: Merchant dashboard — SHIPPED (2026-10-06)
+
+### What was built
+
+- `MerchantUser` model (email, scrypt-hashed password, `owner`/`ops`/`readonly` role) and
+  a dashboard-specific JWT (`JWT_DASHBOARD_SECRET`, deliberately separate from the
+  shopper-facing `JWT_ACCESS_SECRET`).
+- `apps/api/src/dashboard-auth`: `POST /dashboard-auth/bootstrap` (creates the first owner,
+  guarded by the merchant's own API key as proof of ownership — one-time, `409` on a
+  second attempt), `POST /dashboard-auth/login`, `POST /dashboard-auth/users` (owner
+  invites ops/readonly colleagues), `GET /dashboard-auth/me`.
+- `apps/api/src/dashboard`: read endpoints for orders/payments/COD-risk-decisions (any
+  authenticated role), COD-risk-config read (any role) and write (owner/ops), API keys
+  list+rotate (owner only), webhook endpoint listing (owner/ops), Shopify sync status (any
+  role), and daily conversion/RTO metrics bucketed by **IST calendar day** (fixed
+  UTC+5:30 shift, no timezone library needed since IST has no DST).
+- `apps/dashboard-web`: a second SvelteKit SPA (same `adapter-static` pattern as Stage 6's
+  checkout-web) — login/bootstrap screen, then a tabbed dashboard (Orders, Metrics, COD
+  Risk, API Keys, Webhooks, Shopify Sync) with role-aware tab visibility.
+
+### What was verified
+
+- Full workspace `build`, `typecheck`, `lint`, `format` all clean.
+- `apps/api` test suite: **225/225** passing (34 new: 7 bootstrap/login/invite e2e, 8
+  dashboard-read/role-gating e2e).
+- `pnpm audit` / `gitleaks`: no new findings.
+- **Live walkthrough through the actual built dashboard app in a browser** (not just
+  tests): created a merchant, bootstrapped an owner via its API key, logged in, confirmed
+  role-based tab visibility, rotated the API key and watched the old one get marked
+  revoked, edited and saved the COD risk config, and confirmed the Shopify-sync tab
+  correctly reports "not connected" for a merchant with no installed shop.
+- **Found and fixed three real bugs that only the live walkthrough surfaced** (full
+  detail in decision 009): a bare-string API response the frontend couldn't parse as
+  JSON; a stale read-only field (`ruleVersion`) getting sent back on save and tripping
+  `forbidNonWhitelisted`; and — not a code bug at all — a never-killed `vite preview`
+  process silently serving a stale in-memory bundle after every rebuild, which is why
+  "restart the preview server after every rebuild" is now called out explicitly as a
+  known procedural trap for local testing.
+
+### Test results
+
+- `apps/api`: 225/225 unit + e2e passing, including explicit cross-merchant isolation
+  (merchant B's dashboard token never sees merchant A's orders) and role-gating checks
+  (readonly → 403 on config writes and API-key routes; non-owner → 403 inviting users).
+- Live manual walkthrough covered every dashboard tab end-to-end against the real API —
+  see above.
+
+### Known gaps / follow-ups
+
+- No "forgot password" flow for dashboard users — needed before any real merchant
+  onboarding.
+- Dashboard list endpoints cap at `limit` (max 200), no real pagination — fine at this
+  stage's data volumes.
+- Carrying forward unchanged: Stage 2's `POST /merchants` auth gate (decision 003) — the
+  dashboard's bootstrap flow depends on that same API key, so closing that gap in Stage 9
+  is still the right sequencing.
+
+### Decisions
+
+- [`docs/decisions/009-stage8-dashboard.md`](docs/decisions/009-stage8-dashboard.md)

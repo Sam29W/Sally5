@@ -8,5 +8,6 @@ import { MerchantModule } from "../merchant/merchant.module.js";
   imports: [MerchantModule],
   controllers: [WebhookController],
   providers: [WebhookService, webhookSecretCryptoProvider],
+  exports: [WebhookService],
 })
 export class WebhookModule {}

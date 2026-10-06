@@ -15,6 +15,8 @@ import { PaymentModule } from "./payment/payment.module.js";
 import { CodRiskModule } from "./cod-risk/cod-risk.module.js";
 import { PublicCheckoutModule } from "./public-checkout/public-checkout.module.js";
 import { ShopifyModule } from "./shopify/shopify.module.js";
+import { DashboardAuthModule } from "./dashboard-auth/dashboard-auth.module.js";
+import { DashboardModule } from "./dashboard/dashboard.module.js";
 
 @Module({
   imports: [
@@ -33,6 +35,8 @@ import { ShopifyModule } from "./shopify/shopify.module.js";
     CodRiskModule,
     PublicCheckoutModule,
     ShopifyModule,
+    DashboardAuthModule,
+    DashboardModule,
   ],
   controllers: [HealthController],
 })
