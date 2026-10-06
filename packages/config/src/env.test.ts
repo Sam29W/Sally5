@@ -9,6 +9,7 @@ const validEnv = {
   PHONE_HASH_KEY: "a".repeat(32),
   JWT_ACCESS_SECRET: "b".repeat(32),
   WEBHOOK_SECRET_ENCRYPTION_KEY: "1".repeat(64),
+  SHOPIFY_TOKEN_ENCRYPTION_KEY: "2".repeat(64),
 };
 
 describe("loadConfig", () => {
